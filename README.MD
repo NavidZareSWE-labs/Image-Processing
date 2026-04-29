@@ -1,4 +1,5 @@
-# Image Processing Repository
+# Digital Image Processing
+![Digital Image Processing](https://res.cloudinary.com/dyjew8iji/image/upload/v1777428100/Digital_Image_Processing_kj5i9x.png)
 
 Welcome to my Image Processing repository! This repository contains a collection of source code, implementation details, and technical reports covering various image processing techniques. The projects span fundamental pixel-level manipulations to advanced transform-domain analysis.
 
