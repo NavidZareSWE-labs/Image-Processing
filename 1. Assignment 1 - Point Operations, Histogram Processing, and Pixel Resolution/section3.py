@@ -132,7 +132,7 @@ def run_section3():
         img_gray = to_gray(img)
         plot_histogram_and_cdf_s3(
             img_gray,
-            title=f'Histogram & Normalised CDF — {name}',
+            title=f'Histogram & Normalised CDF - {name}',
             save_path=f'output/section3/hist_{name}.png',
         )
 

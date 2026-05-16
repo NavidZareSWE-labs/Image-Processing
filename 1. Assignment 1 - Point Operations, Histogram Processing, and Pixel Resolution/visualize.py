@@ -44,10 +44,10 @@ def plot_result_s0(SM, LG_zeros, LG_inserted, title="Diamond Embedding", filenam
 
     # Prevent overwriting of previous images
     base, ext = os.path.splitext(filename)
-    save_path = f'output/section0/{filename}'
+    save_path = f'output/utils/{filename}'
     counter = 1
     while os.path.exists(save_path):
-        save_path = f'output/section0/{base}_{counter}{ext}'
+        save_path = f'output/utils/{base}_{counter}{ext}'
         counter += 1
 
     plt.savefig(save_path, dpi=150, bbox_inches='tight')

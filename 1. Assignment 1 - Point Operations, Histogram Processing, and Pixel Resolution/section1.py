@@ -210,7 +210,7 @@ def process_image(img_path, img_name, factors=(2, 4, 8)):
         plt_fig2, plt_axes2 = plt.subplots(
             1, plt_num_cols, figsize=(4 * plt_num_cols, 4))
         plt_fig2.suptitle(
-            f"{img_name} | N={scale_fact} — Zoomed Patch", fontsize=11)
+            f"{img_name} | N={scale_fact} - Zoomed Patch", fontsize=11)
 
         _show(plt_axes2[0], crop_patch(original, patch_start_y, patch_start_x),
               "Original\npatch", is_color)

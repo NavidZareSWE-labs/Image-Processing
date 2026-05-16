@@ -114,7 +114,7 @@ def run_gamma_correction():
         s_curve = np.clip(255.0 * np.power(r_range / 255.0, gamma_val), 0, 255)
         plot_transform_s2(img_gray, gamma_corrected_image,
                           r_range, s_curve,
-                          f"Gamma Correction  s = 255·(r/255)^γ  — {title}",
+                          f"Gamma Correction  s = 255·(r/255)^γ  - {title}",
                           subtitles=(
                               "Original", f"Gamma-corrected ({plt_lable})"),
                           save_path=f"output/section2/{fname}.png")

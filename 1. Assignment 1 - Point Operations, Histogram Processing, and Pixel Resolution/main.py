@@ -2,7 +2,7 @@ from section4 import run_section4
 from section3 import run_section3
 from section2 import run_section2
 from section1_fast import run_section1
-from section0 import run_section0
+from utils import run_utils
 import argparse
 import os
 import sys
@@ -30,7 +30,7 @@ def main():
     args = parser.parse_args()
 
     sections = {
-        0: ('Section 0 - Diamond Pattern Embedding', run_section0),
+        0: ('Section 0 - Diamond Pattern Embedding', run_utils),
         1: ('Section 1 - Pixel Resolution & Interpolation',  run_section1),
         2: ('Section 2 - Point Operations & Bit-Plane Slicing', run_section2),
         3: ('Section 3 - Histogram Equalization (GHE + LHE)', run_section3),

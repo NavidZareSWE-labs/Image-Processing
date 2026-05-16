@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 
-os.makedirs('output/section0', exist_ok=True)
+os.makedirs('output/utils', exist_ok=True)
 
 
 def check_embedding_feasibility(sm_row, sm_col, lg_row, lg_col):
@@ -39,7 +39,7 @@ def embed_diamond(SM, LG):
     return lg_out
 
 
-def run_section0():
+def run_utils():
     print("\n" + "=" * 60)
     print("SECTION 0 : Random Diamond Pattern Embedding")
     print("=" * 60)
@@ -52,7 +52,7 @@ def run_section0():
     print("S =\n", SM1)
     print("Inserted L =\n", result)
     plot_result_s0(SM1, LG1, result,
-                   title="Section 0 — Diamond Embedding (5x5 into 9x9)",
+                   title="Section 0 - Diamond Embedding (5x5 into 9x9)",
                    filename="diamond_embedding_5x9.png")
 
     print("\n" + "-" * 60)
@@ -65,7 +65,7 @@ def run_section0():
     print("S =\n", SM2)
     print("Inserted L =\n", result2)
     plot_result_s0(SM2, LG2, result2,
-                   title="Section 0 — Diamond Embedding (3x4 into 11x11)",
+                   title="Section 0 - Diamond Embedding (3x4 into 11x11)",
                    filename="diamond_embedding_3x11.png")
 
     print("\n" + "-" * 60)
@@ -75,7 +75,7 @@ def run_section0():
     result3 = embed_diamond(SM3, LG3)
     print(f"\n[Example 3] S (5x5) into L (5x5) -> '{result3}'")
 
-    print("\n[Section 0] All outputs saved to output/section0/")
+    print("\n[Section 0] All outputs saved to output/utils/")
 
 
 def test_random_embedding():
@@ -103,5 +103,5 @@ def test_random_embedding():
 
 if __name__ == "__main__":
 
-    run_section0()
+    run_utils()
     test_random_embedding()
