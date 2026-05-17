@@ -3,9 +3,10 @@ import sys
 import time
 import numpy as np
 import scipy.io
+from scipy.ndimage import distance_transform_edt
 from pathlib import Path
 from visualize import (
-    save_image_row, save_robustness_plot, save_metrics_table
+    save_image_row, save_robustness_plot
 )
 from utils import (
     convolve2d, load_grayscale, normalise_to_uint8, clip_uint8,
@@ -17,147 +18,158 @@ BASE_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(BASE_DIR))
 
 
-SOBEL_KX = np.array([[-1, 0, 1],
-                     [-2, 0, 2],
-                     [-1, 0, 1]], dtype=np.float64)
+SOBEL_KERNEL_X = np.array([[-1, 0, 1],
+                           [-2, 0, 2],
+                           [-1, 0, 1]], dtype=np.float64)
 
-SOBEL_KY = np.array([[-1, -2, -1],
-                     [0,  0,  0],
-                     [1,  2,  1]], dtype=np.float64)
+SOBEL_KERNEL_Y = np.array([[-1, -2, -1],
+                           [0,  0,  0],
+                           [1,  2,  1]], dtype=np.float64)
 
+PREWITT_KERNEL_X = np.array([[-1, 0, 1],
+                             [-1, 0, 1],
+                             [-1, 0, 1]], dtype=np.float64)
 
-PREWITT_KX = np.array([[-1, 0, 1],
-                       [-1, 0, 1],
-                       [-1, 0, 1]], dtype=np.float64)
+PREWITT_KERNEL_Y = np.array([[-1, -1, -1],
+                             [0,  0,  0],
+                             [1,  1,  1]], dtype=np.float64)
 
-PREWITT_KY = np.array([[-1, -1, -1],
-                       [0,  0,  0],
-                       [1,  1,  1]], dtype=np.float64)
+ROBERTS_KERNEL_X = np.array([[1,  0],
+                             [0, -1]], dtype=np.float64)
 
+ROBERTS_KERNEL_Y = np.array([[0, 1],
+                             [-1, 0]], dtype=np.float64)
 
-ROBERTS_KX = np.array([[1,  0],
-                       [0, -1]], dtype=np.float64)
-
-ROBERTS_KY = np.array([[0, 1],
-                       [-1, 0]], dtype=np.float64)
-
-
-LAPLACIAN_K = np.array([[0,  1,  0],
-                        [1, -4,  1],
-                        [0,  1,  0]], dtype=np.float64)
+LAPLACIAN_KERNEL = np.array([[0,  1,  0],
+                             [1, -4,  1],
+                             [0,  1,  0]], dtype=np.float64)
 
 
 def sobel(gray):
-    Gx = convolve2d(gray.astype(np.float64), SOBEL_KX)
-    Gy = convolve2d(gray.astype(np.float64), SOBEL_KY)
+    Gx = convolve2d(gray.astype(np.float64), SOBEL_KERNEL_X)
+    Gy = convolve2d(gray.astype(np.float64), SOBEL_KERNEL_Y)
     mag = np.sqrt(Gx ** 2 + Gy ** 2)
     return Gx, Gy, mag
 
 
 def prewitt(gray):
-    Gx = convolve2d(gray.astype(np.float64), PREWITT_KX)
-    Gy = convolve2d(gray.astype(np.float64), PREWITT_KY)
+    Gx = convolve2d(gray.astype(np.float64), PREWITT_KERNEL_X)
+    Gy = convolve2d(gray.astype(np.float64), PREWITT_KERNEL_Y)
     mag = np.sqrt(Gx ** 2 + Gy ** 2)
     return Gx, Gy, mag
 
 
 def roberts(gray):
-    Gx = convolve2d(gray.astype(np.float64), ROBERTS_KX)
-    Gy = convolve2d(gray.astype(np.float64), ROBERTS_KY)
+    Gx = convolve2d(gray.astype(np.float64), ROBERTS_KERNEL_X)
+    Gy = convolve2d(gray.astype(np.float64), ROBERTS_KERNEL_Y)
     mag = np.sqrt(Gx ** 2 + Gy ** 2)
     return Gx, Gy, mag
 
 
 def laplacian(gray):
-    lap_raw = convolve2d(gray.astype(np.float64), LAPLACIAN_K)
+    lap_raw = convolve2d(gray.astype(np.float64), LAPLACIAN_KERNEL)
     edge_map = normalise_to_uint8(np.abs(lap_raw))
     sharpened = clip_uint8(gray.astype(np.float64) - 1.0 * lap_raw)
     return lap_raw, edge_map, sharpened
 
 
-def _non_maximum_suppression(magnitude,
-                             direction):
-    H, W = magnitude.shape
-    output = np.zeros((H, W), dtype=np.float64)
+def _non_maximum_suppression(magnitude, direction):
 
-    # Convert angle to degrees and wrap to [0°, 180°)
+    # Gradient angle in degrees, wrapped to [0, 180).
     angle_deg = np.rad2deg(direction) % 180.0
 
-    for i in range(1, H - 1):
-        for j in range(1, W - 1):
-            ang = angle_deg[i, j]
+    # Quantise into 4 bins. The default bin (0) covers [0, 22.5) and
+    # [157.5, 180), which both correspond to a near-horizontal gradient.
+    direction_bin = np.zeros_like(angle_deg, dtype=np.uint8)
+    direction_bin[(angle_deg >= 22.5) & (angle_deg < 67.5)] = 1   # ~45 deg
+    direction_bin[(angle_deg >= 67.5) & (angle_deg < 112.5)] = 2  # vertical
+    direction_bin[(angle_deg >= 112.5) & (angle_deg < 157.5)] = 3  # ~135 deg
 
-            if (0.0 <= ang < 22.5) or (157.5 <= ang < 180.0):
-                # 0° - compare left/right
-                n1, n2 = magnitude[i, j - 1], magnitude[i, j + 1]
-            elif 22.5 <= ang < 67.5:
-                # 45° - compare top-left / bottom-right
-                n1, n2 = magnitude[i - 1, j - 1], magnitude[i + 1, j + 1]
-            elif 67.5 <= ang < 112.5:
-                # 90° - compare top/bottom
-                n1, n2 = magnitude[i - 1, j], magnitude[i + 1, j]
-            else:
-                # 135° - compare top-right / bottom-left
-                n1, n2 = magnitude[i - 1, j + 1], magnitude[i + 1, j - 1]
+    padded = np.pad(magnitude, 1, mode='constant', constant_values=0)
 
-            if magnitude[i, j] >= n1 and magnitude[i, j] >= n2:
-                output[i, j] = magnitude[i, j]
+    # Eight one-pixel-shifted views of `magnitude`. Read each slice as
+    # "the pixel <direction> of (i,j)" - e.g. `left[i,j]` is magnitude[i,j-1].
+    left = padded[1:-1, :-2]
+    right = padded[1:-1, 2:]
+    up = padded[:-2, 1:-1]
+    down = padded[2:, 1:-1]
+    up_left = padded[:-2, :-2]
+    up_right = padded[:-2, 2:]
+    down_left = padded[2:, :-2]
+    down_right = padded[2:, 2:]
+
+    # For each pixel, pick its two neighbours along the gradient direction:
+    #   bin 0 (horizontal gradient): left      / right
+    #   bin 1 (45 deg gradient):     up-left   / down-right
+    #   bin 2 (vertical gradient):   up        / down
+    #   bin 3 (135 deg gradient):    up-right  / down-left
+    n1 = np.where(direction_bin == 0, left,
+         np.where(direction_bin == 1, up_left,
+         np.where(direction_bin == 2, up, up_right)))
+    n2 = np.where(direction_bin == 0, right,
+         np.where(direction_bin == 1, down_right,
+         np.where(direction_bin == 2, down, down_left)))
+
+    keep = (magnitude >= n1) & (magnitude >= n2)
+    output = np.where(keep, magnitude, 0.0)
+
+    # Remove border pixels
+    output[0, :] = 0
+    output[-1, :] = 0
+    output[:,  0] = 0
+    output[:, -1] = 0
 
     return output
 
 
-def _hysteresis_threshold(nms,
-                          low_thresh,
-                          high_thresh):
-    from numpy.lib.stride_tricks import as_strided
+def _hysteresis_threshold(nms, low_thresh, high_thresh):
+
     STRONG = np.uint8(255)
     WEAK = np.uint8(128)
+
     output = np.zeros(nms.shape, dtype=np.uint8)
     output[nms >= high_thresh] = STRONG
     output[(nms >= low_thresh) & (nms < high_thresh)] = WEAK
 
-    H, W = output.shape
-    changed = True
-    while changed:
-        strong_mask = (output == STRONG).astype(np.uint8)
-        # Build 3x3 sliding-window view of the strong mask
-        padded = np.pad(strong_mask, 1, mode='constant', constant_values=0)
-        padded = np.ascontiguousarray(padded)
-        win_shape = (H, W, 3, 3)
-        win_strides = (padded.strides[0], padded.strides[1],
-                       padded.strides[0], padded.strides[1])
-        wins = as_strided(padded, shape=win_shape, strides=win_strides)
-        # Any pixel whose 3x3 neighbourhood contains a strong pixel
-        has_strong_neighbour = wins.max(axis=(2, 3)).astype(bool)
-        # Promote weak pixels that have a strong neighbour
-        promote = (output == WEAK) & has_strong_neighbour
-        if promote.any():
-            output[promote] = STRONG
-        else:
-            changed = False
+    while True:
+        strong_mask = (output == STRONG)
+        padded_mask = np.pad(strong_mask, 1, mode='constant',
+                             constant_values=False)
 
+        # Each slice below is `strong_mask` shifted by one pixel in one of the
+        # eight directions. ORing all eight gives, for every pixel, whether
+        # any of its 3x3 neighbours is currently strong.
+        has_strong_neighbour = (
+            padded_mask[:-2, :-2] | padded_mask[:-2, 1:-1] | padded_mask[:-2, 2:] |
+            padded_mask[1:-1, :-2] | padded_mask[1:-1, 2:] |
+            padded_mask[2:, :-2] | padded_mask[2:, 1:-1] | padded_mask[2:, 2:]
+        )
+
+        promote = (output == WEAK) & has_strong_neighbour
+        if not promote.any():
+            break
+        output[promote] = STRONG
+
+    # Any WEAK pixel that was never promoted becomes a non-edge.
     output[output == WEAK] = 0
     return output
 
 
-def canny(gray,
-          sigma=1.0,
-          low_ratio=0.05,
-          high_ratio=0.15):
-    # Step 1 - Gaussian smoothing
+def canny(gray, sigma=1.0, low_ratio=0.05, high_ratio=0.15):
+    #  Gaussian smoothing
     ksize = gaussian_kernel_size(sigma)
     kernel = gaussian_kernel(ksize, sigma)
     blurred = convolve2d(gray.astype(np.float64), kernel)
     blurred_u8 = clip_uint8(blurred)
 
-    # Step 2 - Gradient magnitude & direction (Sobel)
+    #  Gradient magnitude & direction (Sobel)
     Gx, Gy, mag = sobel(blurred_u8)
-    direction = np.arctan2(Gy, Gx)       # radians in [-π, π]
+    direction = np.arctan2(Gy, Gx)       # radians in [-pi, pi]
 
-    # Step 3 - Non-maximum suppression
+    #  Non-maximum suppression
     nms = _non_maximum_suppression(mag, direction)
 
-    # Step 4 - Hysteresis thresholding
+    #  Hysteresis thresholding
     max_nms = nms.max() if nms.max() > 0 else 1.0
     low_thresh = low_ratio * max_nms
     high_thresh = high_ratio * max_nms
@@ -175,23 +187,20 @@ def canny(gray,
     }
 
 
-def _load_gt_consensus(mat_path: str):
-
+def _load_gt_consensus(mat_path):
     mat = scipy.io.loadmat(mat_path, squeeze_me=False)
-    gt = mat['groundTruth']           # shape (1, n_annotators)
-    n = gt.shape[1]
-    first_b = gt[0, 0]['Boundaries'][0, 0]
-    H, W = first_b.shape
+    gt = mat['groundTruth']
+    num_annotators = gt.shape[1]
+    first_boundary = gt[0, 0]['Boundaries'][0, 0]
+    H, W = first_boundary.shape
     consensus = np.zeros((H, W), dtype=np.uint8)
-    for i in range(n):
-        b = gt[0, i]['Boundaries'][0, 0]
-        consensus = np.logical_or(consensus, b > 0).astype(np.uint8)
+    for i in range(num_annotators):
+        boundaries = gt[0, i]['Boundaries'][0, 0]
+        consensus = np.logical_or(consensus, boundaries > 0).astype(np.uint8)
     return consensus
 
 
-def threshold_edge_map(magnitude,
-                       percentile=90.0):
-
+def threshold_edge_map(magnitude, percentile=90.0):
     nonzero = magnitude[magnitude > 0]
     if len(nonzero) == 0:
         return np.zeros_like(magnitude, dtype=np.uint8)
@@ -199,47 +208,43 @@ def threshold_edge_map(magnitude,
     return (magnitude >= thresh).astype(np.uint8)
 
 
-def _dilate_binary(binary, radius: int):
+def _dilate_binary(binary, radius):
+    out = binary.astype(bool)
+    H, W = out.shape
+    rad = int(radius)
 
-    out = binary.astype(np.float64)
-    H, W = binary.shape
-    r = int(radius)
+    # Expand edges horizontally.
+    # First add empty columns on the left and right so shifting stays in bounds.
+    # Then slide across neighboring columns and combine them with OR,
+    # so nearby edge pixels spread sideways.
+    padded_h = np.pad(out, ((0, 0), (rad, rad)),
+                      mode='constant', constant_values=False)
+    horizontal = np.zeros_like(out)
+    for offset in range(2 * rad + 1):
+        horizontal = horizontal | padded_h[:, offset:offset + W]
 
-    # Horizontal max-sweep via stride tricks
-    padded = np.pad(out, ((0, 0), (r, r)), mode='constant', constant_values=0)
-    from numpy.lib.stride_tricks import as_strided
-    win_shape = (H, W, 2 * r + 1)
-    win_strides = (padded.strides[0], padded.strides[1], padded.strides[1])
-    wins = as_strided(padded, shape=win_shape, strides=win_strides)
-    out = wins.max(axis=2)
+    # Vertical sweep on the horizontally-dilated result.
+    padded_v = np.pad(horizontal, ((rad, rad), (0, 0)),
+                      mode='constant', constant_values=False)
+    vertical = np.zeros_like(out)
+    for offset in range(2 * rad + 1):
+        vertical = vertical | padded_v[offset:offset + H, :]
 
-    # Vertical max-sweep
-    padded = np.pad(out, ((r, r), (0, 0)), mode='constant', constant_values=0)
-    win_shape = (H, W, 2 * r + 1)
-    win_strides = (padded.strides[0], padded.strides[1], padded.strides[0])
-    wins = as_strided(np.ascontiguousarray(padded),
-                      shape=win_shape, strides=win_strides)
-    out = wins.max(axis=2)
-
-    return (out > 0).astype(np.uint8)
+    return vertical.astype(np.uint8)
 
 
-def evaluate_edge_detector(pred_binary,
-                           gt_binary,
-                           tolerance_px: int = 2):
-
+def evaluate_edge_detector(pred_binary, gt_binary, tolerance_px: int = 2):
     pred = (pred_binary > 0).astype(np.uint8)
     gt = (gt_binary > 0).astype(np.uint8)
 
     n_pred = int(pred.sum())
     n_gt = int(gt.sum())
 
-    if n_pred == 0:
-        return {'precision': 0.0, 'recall': 0.0, 'f1': 0.0, 'loc_error'('inf')}
-    if n_gt == 0:
-        return {'precision': 0.0, 'recall': 0.0, 'f1': 0.0, 'loc_error'('inf')}
+    if n_pred == 0 or n_gt == 0:
+        return {'precision': 0.0, 'recall': 0.0, 'f1': 0.0,
+                'loc_error': float('inf')}
 
-    # Dilation-based Precision & Recall (vectorised, no Python pixel loops)
+    # Precision / Recall with dilation-based matching.
     gt_dilated = _dilate_binary(gt,   tolerance_px)
     pred_dilated = _dilate_binary(pred, tolerance_px)
 
@@ -250,27 +255,13 @@ def evaluate_edge_detector(pred_binary,
     f1 = (2 * precision * recall / (precision + recall)
           if (precision + recall) > 0 else 0.0)
 
-    # Localisation Error - sampled pairwise distances (pred -> nearest GT)
-    pred_pts = np.column_stack(np.where(pred == 1))   # (N_pred, 2)
-    gt_pts = np.column_stack(np.where(gt == 1))   # (N_gt,   2)
-
-    MAX_SAMPLE = 3000
-    if len(pred_pts) > MAX_SAMPLE:
-        idx = np.random.choice(len(pred_pts), MAX_SAMPLE, replace=False)
-        pred_pts_s = pred_pts[idx]
-    else:
-        pred_pts_s = pred_pts
-
-    BLOCK = 1000
-    loc_errors = []
-    for start in range(0, len(pred_pts_s), BLOCK):
-        chunk = pred_pts_s[start:start + BLOCK].astype(np.float64)
-        gt_f = gt_pts.astype(np.float64)
-        diff = chunk[:, np.newaxis, :] - gt_f[np.newaxis, :, :]
-        dist2 = (diff ** 2).sum(axis=2)
-        loc_errors.append(np.sqrt(dist2.min(axis=1)))
-
-    mean_loc = float(np.concatenate(loc_errors).mean())
+    # Localisation error.
+    # `distance_transform_edt(gt == 0)` returns, for every pixel, the Euclidean
+    # distance to the nearest pixel where gt == 1 (i.e. the nearest GT edge).
+    # We then average that distance over the predicted edge pixels.
+    # Average distance = localization error. -> Smaller = better.
+    dist_to_nearest_gt = distance_transform_edt(gt == 0)
+    mean_loc = float(dist_to_nearest_gt[pred == 1].mean())
 
     return {
         'precision': precision,
@@ -281,7 +272,6 @@ def evaluate_edge_detector(pred_binary,
 
 
 def add_gaussian_noise(gray, sigma):
-
     noise = np.random.normal(0, sigma, gray.shape)
     noisy = gray.astype(np.float64) + noise
     return clip_uint8(noisy)
@@ -292,8 +282,6 @@ def run_section1():
     print("\n" + "=" * 70)
     print("  TASK 1 - Edge Detection & Multi-Scale Analysis")
     print("=" * 70)
-
-    # We process both images; use 100007 as primary for evaluation.
     image_names = ['100007', '69007']
 
     for img_name in image_names:
@@ -317,7 +305,7 @@ def run_section1():
         print(f"    Sobel     -> magnitude range [{mag_sob.min():.2f}, {mag_sob.max():.2f}]  "
               f"time={t_sobel*1000:.1f} ms")
 
-        # -- 1.1b  Prewitt -----------------------------------------------------
+        # -- 1.1b  Prewitt ----------------------------------------------------
         t0 = time.time()
         Gx_pre, Gy_pre, mag_pre = prewitt(gray)
         t_prewitt = time.time() - t0
@@ -325,7 +313,7 @@ def run_section1():
         print(f"    Prewitt   -> magnitude range [{mag_pre.min():.2f}, {mag_pre.max():.2f}]  "
               f"time={t_prewitt*1000:.1f} ms")
 
-        # -- 1.1c  Roberts -----------------------------------------------------
+        # -- 1.1c  Roberts ----------------------------------------------------
         t0 = time.time()
         Gx_rob, Gy_rob, mag_rob = roberts(gray)
         t_roberts = time.time() - t0
@@ -333,7 +321,7 @@ def run_section1():
         print(f"    Roberts   -> magnitude range [{mag_rob.min():.2f}, {mag_rob.max():.2f}]  "
               f"time={t_roberts*1000:.1f} ms")
 
-        # -- 1.1d  Laplacian ---------------------------------------------------
+        # -- 1.1d  Laplacian --------------------------------------------------
         t0 = time.time()
         lap_raw, lap_edge, lap_sharp = laplacian(gray)
         t_lap = time.time() - t0
@@ -355,8 +343,9 @@ def run_section1():
 
         # Sobel Gx / Gy figure
         save_image_row(
-            images=[normalise_to_uint8(
-                Gx_sob), normalise_to_uint8(Gy_sob), mag_sob_u8],
+            images=[normalise_to_uint8(Gx_sob),
+                    normalise_to_uint8(Gy_sob),
+                    mag_sob_u8],
             titles=['Sobel Gx (normalised)',
                     'Sobel Gy (normalised)', 'Sobel Magnitude'],
             output_path=os.path.join(
@@ -364,7 +353,7 @@ def run_section1():
             suptitle=f'Task 1.1 - Sobel Components ({img_name})'
         )
 
-        # -- 1.2  Canny Multi-Scale --------------------------------------------
+        # -- 1.2  Canny Multi-Scale -------------------------------------------
         print(
             "\n  [1.2] Canny Edge Detection Pipeline - Multi-Scale (sigma = 0.5, 1.5, 3.0)")
         sigmas = [0.5, 1.5, 3.0]
@@ -388,7 +377,7 @@ def run_section1():
             suptitle=f'Task 1.2 - Canny Multi-Scale ({img_name})'
         )
 
-        # Also save intermediate Canny pipeline stages for sigma=1.5
+        # Intermediate Canny pipeline stages for sigma=1.5
         res_mid = canny_results[1]
         save_image_row(
             images=[gray,
@@ -409,12 +398,11 @@ def run_section1():
         print(f"    Ground truth shape: {gt_binary.shape}  "
               f"edge pixels: {int(gt_binary.sum())}")
 
-        # Threshold Sobel magnitude at 90th percentile
         sobel_binary = threshold_edge_map(mag_sob, percentile=90.0)
         canny_binary = (canny_results[1]['edges'] > 0).astype(np.uint8)
 
         for method_name, pred_bin in [('Sobel (90th pct)', sobel_binary),
-                                      ('Canny (sigma=1.5)',    canny_binary)]:
+                                      ('Canny (sigma=1.5)', canny_binary)]:
             metrics = evaluate_edge_detector(
                 pred_bin, gt_binary, tolerance_px=2)
             print(f"\n    -- {method_name} --")
@@ -423,7 +411,7 @@ def run_section1():
             print(f"       F1 Score       : {metrics['f1']:.4f}")
             print(f"       Loc. Error (px): {metrics['loc_error']:.3f}")
 
-        # -- 1.3d  Robustness to Noise -----------------------------------------
+        # -- 1.3d  Robustness to Noise ----------------------------------------
         print(
             "\n  [1.3] Robustness to Noise (adding Gaussian noise sigma: [0, 30])")
         np.random.seed(42)
@@ -462,7 +450,6 @@ def run_section1():
                 OUT_S1, f'{img_name}_robustness_canny.png')
         )
 
-        # Metrics table for both methods (clean image)
         sob_m = evaluate_edge_detector(sobel_binary, gt_binary)
         canny_m = evaluate_edge_detector(canny_binary, gt_binary)
         cell_data = [
@@ -471,6 +458,7 @@ def run_section1():
             [f"{canny_m['precision']:.4f}", f"{canny_m['recall']:.4f}",
              f"{canny_m['f1']:.4f}",        f"{canny_m['loc_error']:.3f} px"],
         ]
+        print(cell_data)
 
     print("\n  [INFO] Task 1 complete. All outputs saved to:", OUT_S1)
 

@@ -21,9 +21,7 @@ OUT_S3 = BASE_DIR / "output" / "section3"
 
 def ensure_dirs():
     # Assuming OUT_S1, OUT_S2, and OUT_S3 are already Path objects
-    for d in [OUT_S1, OUT_S2, OUT_S3,
-              BASE_DIR / "output" / "utils",
-              BASE_DIR / "output" / "section4"]:
+    for d in [OUT_S1, OUT_S2, OUT_S3]:
         d.mkdir(parents=True, exist_ok=True)
 
 
