@@ -106,8 +106,8 @@ def remove_dup_circles(circles, min_dist=15):
             accepted_x, accepted_y, accepted_rad, accepted_votes = k
             dist = np.sqrt((cand_x - accepted_x) ** 2 +
                            (cand_y - accepted_y) ** 2)
-            min_dist = min_dist + 0.5 * (cand_rad + accepted_rad)
-            if dist < min_dist:
+            min_dist_threshold = min_dist + 0.5 * (cand_rad + accepted_rad)
+            if dist < min_dist_threshold:
                 is_rejected = True
                 break
         if not is_rejected:
