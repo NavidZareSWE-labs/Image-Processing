@@ -7,6 +7,7 @@ from pathlib import Path
 
 import numpy as np
 import cv2
+from utils import *
 
 BASE_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(BASE_DIR))
@@ -24,6 +25,13 @@ DECIMATION = 3
 PRUNE_ITERS = 8
 
 
+def maybe_replace(matrix, prob=0.3, seed=None):
+    rng = np.random.default_rng(seed)
+    if rng.random() < prob:
+        return make_binary_matrix(like=matrix, seed=seed)
+    return matrix
+
+
 def run(input_dir=BASE_DIR / "input_images", out_dir=BASE_DIR / "output" / "section3"):
     print("\n" + "=" * 78)
     print("PART 3 -- SKELETONISATION & PRUNING")
@@ -34,11 +42,12 @@ def run(input_dir=BASE_DIR / "input_images", out_dir=BASE_DIR / "output" / "sect
     print("3.1  Isolated pairs of connected zeros (Hit-or-Miss warm-up)")
     print("-" * 78)
     print("\nInput toy matrix (0 = the value we search pairs of):")
-    for row in TOY_MATRIX:
+    TEST_MATRIX = maybe_replace(TOY_MATRIX)
+    for row in TEST_MATRIX:
         print("     " + " ".join(str(int(v)) for v in row))
 
     t0 = time.perf_counter()
-    pairs = mp.find_isolated_zero_pairs(TOY_MATRIX)
+    pairs = mp.find_isolated_zero_pairs(TEST_MATRIX)
     dt = time.perf_counter() - t0
     print(f"\nDetected {len(pairs)} isolated zero-pair(s) "
           f"in {dt * 1e3:.3f} ms:")
@@ -47,7 +56,7 @@ def run(input_dir=BASE_DIR / "input_images", out_dir=BASE_DIR / "output" / "sect
         print(f"   pair {index}: ({r1}, {c1}) -- ({r2}, {c2})")
 
     out31 = f"{out_dir}/3_1_isolated_pairs.png"
-    vis.plot_matrix_pairs(TOY_MATRIX, pairs, out31)
+    vis.plot_matrix_pairs(TEST_MATRIX, pairs, out31)
     print(f"[save] {out31}")
 
     # ---- 3.2  Skeletonisation (thinning) ----

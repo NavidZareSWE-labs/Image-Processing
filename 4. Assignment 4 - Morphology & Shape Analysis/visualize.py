@@ -18,7 +18,10 @@ def plot_matrix_pairs(matrix, pairs, path):
     _ensure_dir(path)
     M = np.asarray(matrix)
     fig, ax = plt.subplots(figsize=(5.5, 5.5))
-    ax.imshow(M, cmap="gray_r", vmin=0, vmax=1)
+
+    alpha = np.where(M == 1, 0.85, 1.0)  # 1s at 50% opacity, 0s fully opaque
+    ax.imshow(M, cmap="gray_r", vmin=0, vmax=1, alpha=alpha)
+
     for r in range(M.shape[0]):
         for c in range(M.shape[1]):
             ax.text(c, r, str(M[r, c]), ha="center", va="center",
