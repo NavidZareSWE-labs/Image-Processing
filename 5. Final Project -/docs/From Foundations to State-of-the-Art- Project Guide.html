@@ -1,0 +1,2447 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Final Project Guide — From Foundations to State-of-the-Art (Image Denoising / DnCNN)</title>
+<style>
+/* ============================================================
+   0. TOKENS
+   ============================================================ */
+:root{
+  --bg:#0a0e17;
+  --bg-2:#0f1522;
+  --panel:#131a2a;
+  --panel-2:#182034;
+  --line:#243049;
+  --line-soft:#1c2537;
+  --txt:#e6ebf5;
+  --txt-2:#a8b4cc;
+  --txt-3:#7c89a6;
+  --acc:#5eead4;
+  --acc-2:#818cf8;
+  --acc-3:#f472b6;
+  --warn:#fbbf24;
+  --ok:#4ade80;
+  --bad:#fb7185;
+  --radius:14px;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --shadow:0 10px 40px -12px rgba(0,0,0,.7);
+}
+html[data-theme="light"]{
+  --bg:#f7f8fc; --bg-2:#eef1f8; --panel:#ffffff; --panel-2:#f3f5fb;
+  --line:#d8def0; --line-soft:#e6eaf5;
+  --txt:#111726; --txt-2:#3f4a63; --txt-3:#6b7691;
+  --acc:#0d9488; --acc-2:#4f46e5; --acc-3:#db2777;
+  --shadow:0 10px 30px -14px rgba(20,30,60,.25);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:84px}
+body{
+  margin:0;background:var(--bg);color:var(--txt);
+  font-family:var(--sans);font-size:16.5px;line-height:1.75;
+  -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{animation-duration:.001ms!important;transition-duration:.001ms!important}
+}
+
+/* ============================================================
+   1. AMBIENT BACKGROUND
+   ============================================================ */
+.aurora{position:fixed;inset:0;z-index:-2;overflow:hidden;pointer-events:none}
+.aurora span{
+  position:absolute;border-radius:50%;filter:blur(90px);opacity:.16;
+  animation:drift 26s ease-in-out infinite alternate;
+}
+.aurora span:nth-child(1){width:520px;height:520px;background:var(--acc-2);top:-120px;left:-100px}
+.aurora span:nth-child(2){width:460px;height:460px;background:var(--acc);top:35%;right:-140px;animation-delay:-8s}
+.aurora span:nth-child(3){width:400px;height:400px;background:var(--acc-3);bottom:-120px;left:30%;animation-delay:-15s}
+@keyframes drift{
+  0%{transform:translate(0,0) scale(1)}
+  50%{transform:translate(60px,-40px) scale(1.15)}
+  100%{transform:translate(-40px,50px) scale(.95)}
+}
+.grid-fade{
+  position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.35;
+  background-image:linear-gradient(var(--line-soft) 1px,transparent 1px),linear-gradient(90deg,var(--line-soft) 1px,transparent 1px);
+  background-size:44px 44px;
+  mask-image:radial-gradient(ellipse 90% 60% at 50% 0%,#000 20%,transparent 75%);
+  -webkit-mask-image:radial-gradient(ellipse 90% 60% at 50% 0%,#000 20%,transparent 75%);
+}
+
+/* ============================================================
+   2. PROGRESS + TOPBAR
+   ============================================================ */
+#progress{
+  position:fixed;top:0;left:0;height:3px;width:0%;z-index:60;
+  background:linear-gradient(90deg,var(--acc),var(--acc-2),var(--acc-3));
+  box-shadow:0 0 14px var(--acc-2);transition:width .08s linear;
+}
+.topbar{
+  position:sticky;top:0;z-index:50;
+  display:flex;align-items:center;gap:14px;
+  padding:10px 20px;
+  background:color-mix(in srgb,var(--bg) 82%,transparent);
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--line-soft);
+}
+.topbar .brand{font-weight:700;letter-spacing:.2px;font-size:.95rem;white-space:nowrap}
+.topbar .brand em{color:var(--acc);font-style:normal}
+.topbar .spacer{flex:1}
+.btn{
+  background:var(--panel);border:1px solid var(--line);color:var(--txt-2);
+  padding:7px 13px;border-radius:999px;cursor:pointer;font-size:.82rem;font-family:inherit;
+  transition:.2s;white-space:nowrap;
+}
+.btn:hover{color:var(--txt);border-color:var(--acc-2);transform:translateY(-1px)}
+.btn:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+#menuBtn{display:none}
+
+/* ============================================================
+   3. HERO
+   ============================================================ */
+.hero{
+  position:relative;padding:74px 24px 62px;text-align:center;
+  border-bottom:1px solid var(--line-soft);overflow:hidden;
+}
+.hero .kicker{
+  display:inline-block;font-size:.75rem;letter-spacing:.22em;text-transform:uppercase;
+  color:var(--acc);border:1px solid color-mix(in srgb,var(--acc) 40%,transparent);
+  padding:5px 14px;border-radius:999px;margin-bottom:22px;
+  animation:pop .7s cubic-bezier(.2,.8,.2,1) both;
+}
+.hero h1{
+  font-size:clamp(2rem,5.4vw,3.5rem);line-height:1.1;margin:0 0 16px;font-weight:800;letter-spacing:-.02em;
+  background:linear-gradient(100deg,var(--txt) 8%,var(--acc) 42%,var(--acc-2) 70%,var(--acc-3) 96%);
+  background-size:280% auto;
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+  animation:shimmer 9s linear infinite, pop .8s cubic-bezier(.2,.8,.2,1) both;
+}
+@keyframes shimmer{to{background-position:280% center}}
+@keyframes pop{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
+.hero p.lead{max-width:760px;margin:0 auto 8px;color:var(--txt-2);font-size:1.06rem;animation:pop .9s .1s cubic-bezier(.2,.8,.2,1) both}
+.hero .meta{margin-top:26px;display:flex;flex-wrap:wrap;gap:10px;justify-content:center;animation:pop 1s .2s cubic-bezier(.2,.8,.2,1) both}
+.pill{
+  background:var(--panel);border:1px solid var(--line);border-radius:999px;
+  padding:7px 15px;font-size:.82rem;color:var(--txt-2);
+}
+.pill b{color:var(--txt)}
+
+/* countdown strip */
+.countdown{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin-top:30px}
+.cd-card{
+  background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+  padding:14px 20px;min-width:150px;position:relative;overflow:hidden;
+}
+.cd-card::after{content:"";position:absolute;left:0;bottom:0;height:2px;width:100%;background:linear-gradient(90deg,var(--acc),transparent)}
+.cd-card .n{font-size:1.6rem;font-weight:800;color:var(--acc);font-variant-numeric:tabular-nums}
+.cd-card .l{font-size:.74rem;color:var(--txt-3);text-transform:uppercase;letter-spacing:.12em}
+
+/* ============================================================
+   4. LAYOUT
+   ============================================================ */
+.layout{display:grid;grid-template-columns:290px minmax(0,1fr);gap:0;max-width:1400px;margin:0 auto}
+.sidebar{
+  position:sticky;top:52px;align-self:start;height:calc(100vh - 52px);
+  overflow-y:auto;padding:26px 16px 60px;border-right:1px solid var(--line-soft);
+  scrollbar-width:thin;
+}
+.sidebar::-webkit-scrollbar{width:7px}
+.sidebar::-webkit-scrollbar-thumb{background:var(--line);border-radius:9px}
+.sidebar h4{font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--txt-3);margin:20px 10px 8px}
+.sidebar a{
+  display:block;padding:7px 12px;margin:1px 0;border-radius:9px;
+  color:var(--txt-2);text-decoration:none;font-size:.88rem;
+  border-left:2px solid transparent;transition:.18s;
+}
+.sidebar a:hover{background:var(--panel);color:var(--txt);transform:translateX(3px)}
+.sidebar a.active{color:var(--acc);border-left-color:var(--acc);background:color-mix(in srgb,var(--acc) 8%,transparent);font-weight:600}
+main{padding:44px 34px 140px;min-width:0}
+
+/* ============================================================
+   5. SECTIONS + REVEAL
+   ============================================================ */
+section{margin-bottom:76px;scroll-margin-top:80px}
+.reveal{opacity:0;transform:translateY(26px);transition:opacity .7s cubic-bezier(.2,.7,.2,1),transform .7s cubic-bezier(.2,.7,.2,1)}
+.reveal.in{opacity:1;transform:none}
+h2{
+  font-size:clamp(1.5rem,3vw,2.05rem);margin:0 0 6px;font-weight:800;letter-spacing:-.015em;
+  display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+}
+h2 .num{
+  font-family:var(--mono);font-size:.72rem;color:var(--bg);background:var(--acc);
+  padding:4px 9px;border-radius:7px;font-weight:800;letter-spacing:.05em;
+}
+h3{font-size:1.2rem;margin:34px 0 10px;color:var(--txt);font-weight:700}
+h4{font-size:1rem;margin:22px 0 6px;color:var(--acc);font-weight:700}
+.sub{color:var(--txt-3);margin:0 0 26px;font-size:.95rem}
+p{margin:0 0 15px;color:var(--txt-2)}
+strong{color:var(--txt)}
+a{color:var(--acc-2)}
+a:hover{color:var(--acc)}
+ul,ol{color:var(--txt-2);padding-left:22px;margin:0 0 16px}
+li{margin:7px 0}
+li::marker{color:var(--acc)}
+hr{border:0;border-top:1px solid var(--line-soft);margin:34px 0}
+
+/* ============================================================
+   6. COMPONENTS
+   ============================================================ */
+.card{
+  background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+  padding:22px 24px;margin:18px 0;position:relative;overflow:hidden;
+}
+.card.glow::before{
+  content:"";position:absolute;inset:-1px;border-radius:inherit;padding:1px;
+  background:linear-gradient(120deg,var(--acc),transparent 40%,transparent 60%,var(--acc-2));
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;mask-composite:exclude;opacity:.6;pointer-events:none;
+}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
+.grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:14px}
+
+.note{border-left:3px solid var(--acc-2);background:color-mix(in srgb,var(--acc-2) 8%,transparent);padding:14px 18px;border-radius:0 10px 10px 0;margin:18px 0}
+.warn{border-left:3px solid var(--warn);background:color-mix(in srgb,var(--warn) 9%,transparent);padding:14px 18px;border-radius:0 10px 10px 0;margin:18px 0}
+.good{border-left:3px solid var(--ok);background:color-mix(in srgb,var(--ok) 8%,transparent);padding:14px 18px;border-radius:0 10px 10px 0;margin:18px 0}
+.danger{border-left:3px solid var(--bad);background:color-mix(in srgb,var(--bad) 8%,transparent);padding:14px 18px;border-radius:0 10px 10px 0;margin:18px 0}
+.note p:last-child,.warn p:last-child,.good p:last-child,.danger p:last-child{margin-bottom:0}
+
+.imagine{
+  border:1px dashed color-mix(in srgb,var(--acc) 45%,transparent);
+  background:color-mix(in srgb,var(--acc) 5%,transparent);
+  border-radius:12px;padding:16px 20px;margin:18px 0;
+}
+.imagine b{color:var(--acc)}
+
+/* provenance badges */
+.src{
+  display:inline-block;font-size:.66rem;font-family:var(--mono);letter-spacing:.06em;
+  padding:2px 8px;border-radius:999px;vertical-align:middle;margin-left:6px;text-transform:uppercase;
+  border:1px solid;white-space:nowrap;
+}
+.src.pdf{color:var(--acc);border-color:color-mix(in srgb,var(--acc) 45%,transparent);background:color-mix(in srgb,var(--acc) 10%,transparent)}
+.src.paper{color:var(--acc-2);border-color:color-mix(in srgb,var(--acc-2) 45%,transparent);background:color-mix(in srgb,var(--acc-2) 10%,transparent)}
+.src.deck{color:var(--acc-3);border-color:color-mix(in srgb,var(--acc-3) 45%,transparent);background:color-mix(in srgb,var(--acc-3) 10%,transparent)}
+.src.aid{color:var(--txt-3);border-color:var(--line);background:var(--panel-2)}
+
+/* equations */
+.eq{
+  font-family:var(--mono);font-size:1.02rem;text-align:center;color:var(--txt);
+  background:var(--panel-2);border:1px solid var(--line);border-radius:12px;
+  padding:18px 14px;margin:16px 0;overflow-x:auto;letter-spacing:.02em;
+}
+.eq .where{display:block;font-family:var(--sans);font-size:.8rem;color:var(--txt-3);margin-top:9px}
+
+/* tables */
+.tw{overflow-x:auto;margin:18px 0;border:1px solid var(--line);border-radius:12px}
+table{width:100%;border-collapse:collapse;font-size:.88rem;min-width:520px}
+th{
+  background:var(--panel-2);color:var(--txt);text-align:left;padding:11px 14px;
+  font-weight:700;font-size:.74rem;text-transform:uppercase;letter-spacing:.09em;
+  border-bottom:1px solid var(--line);position:sticky;top:0;
+}
+td{padding:10px 14px;border-bottom:1px solid var(--line-soft);color:var(--txt-2)}
+tr:last-child td{border-bottom:0}
+tbody tr{transition:background .18s}
+tbody tr:hover{background:var(--panel-2)}
+td.best,tr.best td{color:var(--acc);font-weight:700}
+tr.hl{background:color-mix(in srgb,var(--acc) 7%,transparent)}
+.mono{font-family:var(--mono);font-size:.86em}
+
+/* code */
+pre{
+  background:#070b13;border:1px solid var(--line);border-radius:12px;
+  padding:16px 18px;overflow-x:auto;margin:16px 0;font-size:.83rem;line-height:1.65;
+}
+html[data-theme="light"] pre{background:#0f1522}
+pre code{font-family:var(--mono);color:#cbd5e1}
+code{font-family:var(--mono);font-size:.87em;background:var(--panel-2);padding:2px 6px;border-radius:5px;color:var(--acc)}
+pre code{background:none;padding:0;color:#cbd5e1}
+.c-key{color:#c792ea}.c-str{color:#c3e88d}.c-com{color:#5b6a86;font-style:italic}.c-fn{color:#82aaff}.c-num{color:#f78c6c}
+
+/* details */
+details{
+  background:var(--panel);border:1px solid var(--line);border-radius:12px;
+  margin:12px 0;overflow:hidden;transition:border-color .2s;
+}
+details[open]{border-color:color-mix(in srgb,var(--acc-2) 50%,transparent)}
+summary{
+  cursor:pointer;padding:14px 18px;font-weight:650;color:var(--txt);
+  list-style:none;display:flex;align-items:center;gap:11px;transition:background .18s;
+}
+summary:hover{background:var(--panel-2)}
+summary:focus-visible{outline:2px solid var(--acc);outline-offset:-2px}
+summary::-webkit-details-marker{display:none}
+summary::before{
+  content:"▶";color:var(--acc);font-size:.7rem;transition:transform .25s cubic-bezier(.2,.8,.2,1);flex:0 0 auto;
+}
+details[open] summary::before{transform:rotate(90deg)}
+details .body{padding:2px 20px 18px;border-top:1px solid var(--line-soft);animation:slidein .35s ease both}
+@keyframes slidein{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+
+/* stat tiles */
+.stat{
+  background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+  padding:18px;text-align:center;transition:.25s;position:relative;overflow:hidden;
+}
+.stat:hover{transform:translateY(-4px);border-color:var(--acc-2);box-shadow:var(--shadow)}
+.stat .v{font-size:1.75rem;font-weight:800;color:var(--acc);font-variant-numeric:tabular-nums;line-height:1.2}
+.stat .k{font-size:.76rem;color:var(--txt-3);text-transform:uppercase;letter-spacing:.11em;margin-top:5px}
+.stat .d{font-size:.8rem;color:var(--txt-2);margin-top:7px}
+
+/* timeline */
+.tl{position:relative;padding-left:34px;margin:26px 0}
+.tl::before{content:"";position:absolute;left:9px;top:6px;bottom:6px;width:2px;background:linear-gradient(180deg,var(--acc),var(--acc-2),var(--acc-3))}
+.tl-item{position:relative;margin-bottom:26px}
+.tl-item::before{
+  content:"";position:absolute;left:-30px;top:7px;width:12px;height:12px;border-radius:50%;
+  background:var(--bg);border:2px solid var(--acc);
+}
+.tl-item.pulse::before{animation:pulse 2.2s ease-out infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--acc) 70%,transparent)}70%{box-shadow:0 0 0 12px transparent}100%{box-shadow:0 0 0 0 transparent}}
+.tl-item .date{font-family:var(--mono);font-size:.76rem;color:var(--acc);letter-spacing:.06em}
+.tl-item h4{margin:2px 0 6px;color:var(--txt)}
+
+/* chart bars */
+.bar-row{display:grid;grid-template-columns:150px 1fr 78px;align-items:center;gap:12px;margin:9px 0;font-size:.86rem}
+.bar-row .nm{color:var(--txt-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar-track{background:var(--panel-2);border-radius:999px;height:20px;overflow:hidden;border:1px solid var(--line-soft)}
+.bar-fill{height:100%;width:0;border-radius:999px;transition:width 1.4s cubic-bezier(.2,.8,.2,1)}
+.bar-fill.c1{background:linear-gradient(90deg,#475569,#64748b)}
+.bar-fill.c2{background:linear-gradient(90deg,var(--acc-2),#a5b4fc)}
+.bar-fill.c3{background:linear-gradient(90deg,var(--acc),#99f6e4)}
+.bar-row .vl{text-align:right;font-family:var(--mono);color:var(--txt);font-size:.83rem}
+
+/* interactive playground */
+.play{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:16px;margin:18px 0}
+.play figure{margin:0;text-align:center}
+.play canvas{width:100%;max-width:200px;height:auto;border-radius:10px;border:1px solid var(--line);image-rendering:pixelated;background:#000}
+.play figcaption{font-size:.78rem;color:var(--txt-3);margin-top:8px}
+.play figcaption b{display:block;color:var(--txt);font-size:.86rem;margin-bottom:2px}
+.ctrl{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:16px 0 4px}
+.ctrl label{font-size:.85rem;color:var(--txt-2);min-width:135px}
+input[type=range]{
+  -webkit-appearance:none;appearance:none;flex:1;min-width:160px;height:5px;border-radius:999px;
+  background:var(--line);outline:none;
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:17px;height:17px;border-radius:50%;background:var(--acc);
+  cursor:pointer;border:2px solid var(--bg);box-shadow:0 0 10px color-mix(in srgb,var(--acc) 60%,transparent);
+}
+input[type=range]::-moz-range-thumb{width:17px;height:17px;border-radius:50%;background:var(--acc);cursor:pointer;border:2px solid var(--bg)}
+.val{font-family:var(--mono);color:var(--acc);font-size:.88rem;min-width:66px}
+
+/* svg diagram */
+.dia{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px;margin:20px 0;overflow-x:auto}
+.dia svg{display:block;margin:0 auto;max-width:100%;height:auto}
+.dia .cap{text-align:center;font-size:.8rem;color:var(--txt-3);margin-top:12px}
+.flow-dot{animation:flow 3s linear infinite}
+@keyframes flow{from{offset-distance:0%}to{offset-distance:100%}}
+
+/* checklist */
+.chk{list-style:none;padding:0}
+.chk li{
+  display:flex;gap:12px;align-items:flex-start;padding:11px 15px;margin:7px 0;
+  background:var(--panel);border:1px solid var(--line);border-radius:10px;transition:.2s;cursor:pointer;
+}
+.chk li:hover{border-color:var(--acc-2);transform:translateX(3px)}
+.chk li.done{opacity:.5}
+.chk li.done .t{text-decoration:line-through}
+.chk .box{
+  flex:0 0 auto;width:19px;height:19px;border:2px solid var(--line);border-radius:5px;margin-top:3px;
+  display:grid;place-items:center;font-size:.7rem;color:var(--bg);transition:.2s;
+}
+.chk li.done .box{background:var(--acc);border-color:var(--acc)}
+.chk li.done .box::after{content:"✓";font-weight:900}
+.chk .t{color:var(--txt-2);font-size:.92rem}
+
+/* back to top */
+#top{
+  position:fixed;right:22px;bottom:22px;z-index:40;width:46px;height:46px;border-radius:50%;
+  background:var(--panel);border:1px solid var(--line);color:var(--acc);cursor:pointer;
+  display:grid;place-items:center;font-size:1.1rem;opacity:0;pointer-events:none;transition:.3s;
+  box-shadow:var(--shadow);
+}
+#top.show{opacity:1;pointer-events:auto}
+#top:hover{transform:translateY(-4px);border-color:var(--acc)}
+
+footer{border-top:1px solid var(--line-soft);padding:34px 24px;text-align:center;color:var(--txt-3);font-size:.85rem}
+
+/* responsive */
+@media (max-width:960px){
+  .layout{grid-template-columns:1fr}
+  .sidebar{
+    position:fixed;top:52px;left:0;width:280px;height:calc(100vh - 52px);z-index:45;
+    background:var(--bg-2);transform:translateX(-102%);transition:transform .3s cubic-bezier(.2,.8,.2,1);
+    border-right:1px solid var(--line);
+  }
+  .sidebar.open{transform:none;box-shadow:var(--shadow)}
+  #menuBtn{display:inline-block}
+  main{padding:30px 18px 120px}
+  .bar-row{grid-template-columns:110px 1fr 62px;font-size:.79rem}
+}
+@media print{
+  .sidebar,.topbar,#top,#progress,.aurora,.grid-fade{display:none}
+  body{background:#fff;color:#000}
+  details{page-break-inside:avoid}
+  details .body{display:block!important}
+}
+</style>
+</head>
+<body>
+
+<div class="aurora"><span></span><span></span><span></span></div>
+<div class="grid-fade"></div>
+<div id="progress"></div>
+
+<div class="topbar">
+  <button class="btn" id="menuBtn" aria-label="Toggle navigation">☰ Menu</button>
+  <div class="brand">DIP Final Project · <em>Image Denoising</em></div>
+  <div class="spacer"></div>
+  <button class="btn" id="expandAll">Expand all</button>
+  <button class="btn" id="themeBtn">☀︎ Light</button>
+</div>
+
+<header class="hero">
+  <span class="kicker">Complete Study &amp; Project Guide</span>
+  <h1>From Foundations to<br>State-of-the-Art</h1>
+  <p class="lead">Everything you need to understand and complete the Digital Image Processing final project — starting from absolutely zero knowledge, and ending with a defendable master slide deck on <strong>image denoising</strong>.</p>
+  <div class="meta">
+    <span class="pill">Course: <b>Digital Image Processing</b></span>
+    <span class="pill">Instructor: <b>Prof. Zohreh Azimifar</b></span>
+    <span class="pill">Format: <b>3 TA presentations + final PDF deck</b></span>
+    <span class="pill">Your anchor paper: <b>DnCNN (Zhang et al., 2017)</b></span>
+  </div>
+  <div class="countdown" id="countdown"></div>
+</header>
+
+<div class="layout">
+<aside class="sidebar" id="sidebar">
+  <h4>Orientation</h4>
+  <a href="#start">0 · Start here</a>
+  <a href="#overview">1 · What this project is</a>
+  <a href="#bigpicture">2 · The big picture</a>
+
+  <h4>The subject</h4>
+  <a href="#topic">3 · What is image denoising?</a>
+  <a href="#playground">4 · Interactive: noise &amp; PSNR</a>
+  <a href="#concepts">5 · Vocabulary you need</a>
+
+  <h4>The assignment</h4>
+  <a href="#stages">6 · The 3-stage pipeline</a>
+  <a href="#stage1">7 · Stage 1 — Literature</a>
+  <a href="#stage2">8 · Stage 2 — Code deep-dive</a>
+  <a href="#stage3">9 · Stage 3 — Master deck</a>
+  <a href="#grading">10 · Grading criteria</a>
+
+  <h4>The technical core</h4>
+  <a href="#dncnn">11 · DnCNN explained</a>
+  <a href="#architecture">12 · Architecture</a>
+  <a href="#residual">13 · Residual learning</a>
+  <a href="#rlbn">14 · RL + BN synergy</a>
+  <a href="#depth">15 · Depth &amp; receptive field</a>
+  <a href="#multitask">16 · One model, three tasks</a>
+  <a href="#training">17 · Data &amp; training</a>
+  <a href="#results">18 · Results</a>
+  <a href="#limits">19 · Limitations &amp; legacy</a>
+
+  <h4>Execution</h4>
+  <a href="#deckgap">20 · Your deck vs. the rubric</a>
+  <a href="#workflow">21 · Step-by-step plan</a>
+  <a href="#faq">22 · FAQ</a>
+  <a href="#checklist">23 · Submission checklist</a>
+  <a href="#takeaways">24 · Key takeaways</a>
+  <a href="#refs">25 · Sources &amp; links</a>
+</aside>
+
+<main>
+
+<!-- ================= 0 START ================= -->
+<section id="start" class="reveal">
+  <h2><span class="num">00</span> Start here — how to read this guide</h2>
+  <p class="sub">Two minutes of setup that will save you hours of confusion.</p>
+
+  <p>This guide was built from three documents, and every claim in it is traceable back to one of them. To keep that honest, each major statement carries a small coloured badge telling you where it came from:</p>
+
+  <div class="grid2">
+    <div class="card">
+      <p><span class="src pdf">assignment</span> — the official project brief, <em>“From Foundations to State-of-the-Art: A Comprehensive Synthesis”</em> (Digital Image Processing, Prof. Zohreh Azimifar, July 2026). <strong>This is the law.</strong> If anything in this guide contradicts it, the brief wins.</p>
+    </div>
+    <div class="card">
+      <p><span class="src paper">paper</span> — Zhang, Zuo, Chen, Meng &amp; Zhang, <em>“Beyond a Gaussian Denoiser: Residual Learning of Deep CNN for Image Denoising”</em>, IEEE TIP 2017 (arXiv:1608.03981). The technical anchor of your topic.</p>
+    </div>
+    <div class="card">
+      <p><span class="src deck">your deck</span> — the English presentation your group already produced (<code>DnCNN__Final.pdf</code>, 33 slides). Useful for knowing what you have already covered.</p>
+    </div>
+    <div class="card">
+      <p><span class="src aid">study aid</span> — explanation, analogy, diagram, or suggested plan written <em>for this guide</em>. It is <strong>not</strong> a requirement from your instructor. Treat it as advice, never as an obligation.</p>
+    </div>
+  </div>
+
+  <div class="warn">
+    <p><strong>Two honesty notes before you go further.</strong></p>
+    <p>1. Your original instructions referenced a TA transcript (<code>Persian_Transcribe.md</code>, <code>Translated_Transcribe.md</code>) and a file named <code>Final_Project_Machine_Learning.pdf</code>. <strong>None of those were available.</strong> So this guide contains <em>no</em> “the TA said…” clarifications — inventing them would be worse than omitting them. Wherever a TA clarification would normally sit, you will find a <span class="src aid">study aid</span> question you should ask your TA directly.</p>
+    <p>2. The brief that <em>was</em> provided belongs to <strong>Digital Image Processing</strong>, not a machine-learning course. Everything below follows that brief. If your group is working from a different assignment sheet, re-check the deadlines and deliverables against it first.</p>
+  </div>
+
+  <div class="note">
+    <p><strong>Reading order if you are completely new:</strong> §1 → §2 → §3 → §4 (play with it) → §6 → §11. Skip §12–§19 on the first pass; come back when you start writing slides.<br>
+    <strong>Reading order if you already know DnCNN:</strong> §6 → §7 → §8 → §20 → §21. That is where the actual work lives.</p>
+  </div>
+</section>
+
+<!-- ================= 1 OVERVIEW ================= -->
+<section id="overview" class="reveal">
+  <h2><span class="num">01</span> What this project actually is</h2>
+  <p class="sub">One paragraph, no jargon.</p>
+
+  <div class="card glow">
+    <p style="font-size:1.06rem;color:var(--txt)"><strong>In one sentence:</strong> you must pick your assigned image-processing topic, trace how humanity solved that problem from the old mathematical methods all the way to today's best deep-learning models, look at how those modern models are actually written in code, and package the whole story into one enormous, beautifully organised slide deck that could serve as a 2–4 hour masterclass. <span class="src pdf">assignment</span></p>
+  </div>
+
+  <p>The brief states the objective directly: to <strong>track the evolution of your specific topic from its classical DIP origins to its current State-of-the-Art (SOTA)</strong>, and it names “demonstrating the clear, evolutionary path of your topic” as a core requirement. <span class="src pdf">assignment</span></p>
+
+  <p>The brief's own worked example uses edge detection: you would map the journey from the classical Canny Edge Detector → an early deep-learning milestone such as Holistically-Nested Edge Detection (HED) → current SOTA, e.g. Transformer-based edge detectors. <span class="src pdf">assignment</span></p>
+
+  <div class="imagine">
+    <p><b>Imagine that…</b> a friend asks you “how did people remove noise from photos in 1995, and how do they do it in 2026?” A bad answer lists ten paper titles. A good answer tells a <em>story</em>: here is what people tried, here is exactly why it broke, here is what replaced it, and here is why the replacement worked. <strong>This project is grading the story, not the list.</strong></p>
+  </div>
+
+  <h3>Three things you are NOT being asked to do</h3>
+  <div class="grid3">
+    <div class="stat"><div class="v">✕</div><div class="k">Invent a model</div><div class="d">The brief says you are <em>not required to code a new architecture from scratch</em>. <span class="src pdf">assignment</span></div></div>
+    <div class="stat"><div class="v">✕</div><div class="k">Present for 4 hours</div><div class="d">You will present a condensed executive summary; the deck itself carries the depth. <span class="src pdf">assignment</span></div></div>
+    <div class="stat"><div class="v">✕</div><div class="k">Summarise 10 papers</div><div class="d">The brief explicitly warns the deck “cannot read like 10 disconnected paper summaries”. <span class="src pdf">assignment</span></div></div>
+  </div>
+
+  <h3>Three things you absolutely ARE being asked to do</h3>
+  <div class="grid3">
+    <div class="stat"><div class="v">①</div><div class="k">Curate 10+ sources</div><div class="d">With a strict 70 / 30 quality split. <span class="src pdf">assignment</span></div></div>
+    <div class="stat"><div class="v">②</div><div class="k">Read real code</div><div class="d">A genuine “code deep-dive” into GitHub / Hugging Face repositories. <span class="src pdf">assignment</span></div></div>
+    <div class="stat"><div class="v">③</div><div class="k">Defend it live</div><div class="d">Three mandatory TA checkpoints where you are questioned. <span class="src pdf">assignment</span></div></div>
+  </div>
+</section>
+
+<!-- ================= 2 BIG PICTURE ================= -->
+<section id="bigpicture" class="reveal">
+  <h2><span class="num">02</span> The big picture — why this project exists</h2>
+  <p class="sub">Understanding the intent makes every requirement obvious.</p>
+
+  <p>The brief opens with a diagnosis of the field: classical methods established the theoretical groundwork, but modern computer vision has <strong>evolved rapidly, driven by deep learning and massive compute capabilities</strong>. <span class="src pdf">assignment</span> Throughout the semester you presented foundational papers; this project forces you to connect what you learned to where the field actually stands today.</p>
+
+  <p>So the project is really testing four separate abilities at once, and each stage targets one of them:</p>
+
+  <div class="dia">
+    <svg viewBox="0 0 760 250" role="img" aria-label="Diagram showing the four abilities tested by the project">
+      <defs>
+        <linearGradient id="g1" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stop-color="#5eead4"/><stop offset="100%" stop-color="#818cf8"/>
+        </linearGradient>
+        <marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+          <path d="M0,0 L7,3 L0,6 z" fill="#818cf8"/>
+        </marker>
+      </defs>
+      <g font-family="system-ui" font-size="12">
+        <rect x="16" y="90" width="150" height="72" rx="12" fill="#131a2a" stroke="#5eead4" stroke-width="1.4"/>
+        <text x="91" y="118" text-anchor="middle" fill="#e6ebf5" font-size="13" font-weight="700">Scholarship</text>
+        <text x="91" y="138" text-anchor="middle" fill="#a8b4cc">Can you find + judge</text>
+        <text x="91" y="152" text-anchor="middle" fill="#a8b4cc">good research?</text>
+
+        <rect x="206" y="90" width="150" height="72" rx="12" fill="#131a2a" stroke="#818cf8" stroke-width="1.4"/>
+        <text x="281" y="118" text-anchor="middle" fill="#e6ebf5" font-size="13" font-weight="700">Synthesis</text>
+        <text x="281" y="138" text-anchor="middle" fill="#a8b4cc">Can you connect it</text>
+        <text x="281" y="152" text-anchor="middle" fill="#a8b4cc">into one story?</text>
+
+        <rect x="396" y="90" width="150" height="72" rx="12" fill="#131a2a" stroke="#f472b6" stroke-width="1.4"/>
+        <text x="471" y="118" text-anchor="middle" fill="#e6ebf5" font-size="13" font-weight="700">Engineering</text>
+        <text x="471" y="138" text-anchor="middle" fill="#a8b4cc">Can you read the</text>
+        <text x="471" y="152" text-anchor="middle" fill="#a8b4cc">actual code?</text>
+
+        <rect x="586" y="90" width="158" height="72" rx="12" fill="#131a2a" stroke="#fbbf24" stroke-width="1.4"/>
+        <text x="665" y="118" text-anchor="middle" fill="#e6ebf5" font-size="13" font-weight="700">Defence</text>
+        <text x="665" y="138" text-anchor="middle" fill="#a8b4cc">Can you survive</text>
+        <text x="665" y="152" text-anchor="middle" fill="#a8b4cc">the questions?</text>
+
+        <line x1="168" y1="126" x2="202" y2="126" stroke="#818cf8" stroke-width="1.6" marker-end="url(#ar)"/>
+        <line x1="358" y1="126" x2="392" y2="126" stroke="#818cf8" stroke-width="1.6" marker-end="url(#ar)"/>
+        <line x1="548" y1="126" x2="582" y2="126" stroke="#818cf8" stroke-width="1.6" marker-end="url(#ar)"/>
+
+        <text x="91" y="62" text-anchor="middle" fill="#5eead4" font-size="11" font-weight="700" letter-spacing="1.5">STAGE 1</text>
+        <text x="281" y="62" text-anchor="middle" fill="#818cf8" font-size="11" font-weight="700" letter-spacing="1.5">STAGE 1+3</text>
+        <text x="471" y="62" text-anchor="middle" fill="#f472b6" font-size="11" font-weight="700" letter-spacing="1.5">STAGE 2</text>
+        <text x="665" y="62" text-anchor="middle" fill="#fbbf24" font-size="11" font-weight="700" letter-spacing="1.5">ALL 3 TA DEFENCES</text>
+
+        <rect x="16" y="196" width="728" height="38" rx="10" fill="none" stroke="#243049" stroke-dasharray="5 4"/>
+        <text x="380" y="220" text-anchor="middle" fill="#7c89a6" font-size="12">Final grade = a weighted mix of all four (see §10)</text>
+      </g>
+    </svg>
+    <div class="cap">Fig. A — The four competencies the project measures, mapped onto the three stages. <span class="src aid">study aid</span></div>
+  </div>
+
+  <h3>Why <em>your</em> topic is image denoising</h3>
+  <p>Your group's existing English deck is built entirely around DnCNN — a denoising CNN. <span class="src deck">your deck</span> Denoising is an excellent fit for this brief, because the evolutionary path is unusually clean and well documented:</p>
+
+  <div class="dia">
+    <svg viewBox="0 0 780 190" role="img" aria-label="Evolution timeline of image denoising">
+      <defs>
+        <linearGradient id="gline" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stop-color="#64748b"/><stop offset="45%" stop-color="#5eead4"/><stop offset="100%" stop-color="#f472b6"/>
+        </linearGradient>
+      </defs>
+      <line x1="40" y1="100" x2="740" y2="100" stroke="url(#gline)" stroke-width="3" stroke-linecap="round"/>
+      <g font-family="system-ui" font-size="11.5" text-anchor="middle">
+        <g><circle cx="80" cy="100" r="8" fill="#0a0e17" stroke="#64748b" stroke-width="2.5"/>
+          <text x="80" y="76" fill="#e6ebf5" font-weight="700">Filters</text>
+          <text x="80" y="128" fill="#7c89a6">Gaussian / median</text>
+          <text x="80" y="143" fill="#7c89a6">total variation</text></g>
+        <g><circle cx="240" cy="100" r="8" fill="#0a0e17" stroke="#94a3b8" stroke-width="2.5"/>
+          <text x="240" y="76" fill="#e6ebf5" font-weight="700">Priors</text>
+          <text x="240" y="128" fill="#7c89a6">BM3D 2007</text>
+          <text x="240" y="143" fill="#7c89a6">WNNM 2014</text></g>
+        <g><circle cx="400" cy="100" r="8" fill="#0a0e17" stroke="#5eead4" stroke-width="2.5"/>
+          <text x="400" y="76" fill="#e6ebf5" font-weight="700">Unrolled</text>
+          <text x="400" y="128" fill="#7c89a6">CSF 2014</text>
+          <text x="400" y="143" fill="#7c89a6">TNRD 2016</text></g>
+        <g><circle cx="560" cy="100" r="10" fill="#5eead4" stroke="#0a0e17" stroke-width="2.5"/>
+          <text x="560" y="76" fill="#5eead4" font-weight="800">DnCNN 2017</text>
+          <text x="560" y="128" fill="#a8b4cc">residual learning</text>
+          <text x="560" y="143" fill="#a8b4cc">+ batch norm</text></g>
+        <g><circle cx="710" cy="100" r="8" fill="#0a0e17" stroke="#f472b6" stroke-width="2.5"/>
+          <text x="710" y="76" fill="#f472b6" font-weight="700">Modern</text>
+          <text x="710" y="128" fill="#7c89a6">attention /</text>
+          <text x="710" y="143" fill="#7c89a6">transformers</text></g>
+      </g>
+      <text x="390" y="176" text-anchor="middle" fill="#7c89a6" font-family="system-ui" font-size="11">classical mathematics → learned priors → deep CNNs → attention-based architectures</text>
+    </svg>
+    <div class="cap">Fig. B — The evolutionary spine of image denoising. Method names and years are taken from your deck and the DnCNN paper; the grouping into four eras is a teaching device. <span class="src paper">paper</span> <span class="src deck">your deck</span> <span class="src aid">study aid</span></div>
+  </div>
+
+  <div class="danger">
+    <p><strong>The trap to avoid.</strong> DnCNN is your <em>anchor</em>, not your <em>topic</em>. The topic is <em>image denoising</em>. A deck that is 90% DnCNN will fail the “evolutionary path” requirement no matter how good the DnCNN part is. DnCNN should occupy the middle of your story, with classical methods before it and modern attention/transformer methods after it.</p>
+  </div>
+</section>
+
+<!-- ================= 3 TOPIC ================= -->
+<section id="topic" class="reveal">
+  <h2><span class="num">03</span> What is image denoising? (from zero)</h2>
+  <p class="sub">Start with intuition. The mathematics comes second.</p>
+
+  <h3>The intuition</h3>
+  <p>Take a photo in a dark room with your phone. The picture comes out grainy — speckled with random light and dark dots that were not in the real scene. Those dots are <strong>noise</strong>: random errors introduced by the camera sensor, not information about the world. <strong>Denoising</strong> is the task of removing those random dots while keeping everything real: edges, textures, faces, text.</p>
+
+  <div class="imagine">
+    <p><b>Imagine that…</b> someone whispers a sentence to you in a noisy café. You hear the whisper <em>plus</em> café noise. Your brain removes the café noise and recovers the sentence. You can do that because you know what sentences sound like — you have a <strong>prior</strong>, a built-in model of what is plausible. Every denoising algorithm ever built is an attempt to give a computer that same kind of prior about what real images look like.</p>
+  </div>
+
+  <h3>The mathematics — one equation, and it never changes</h3>
+  <p>The entire field rests on a single degradation model: a noisy observation <span class="mono">y</span> is the clean image <span class="mono">x</span> with noise <span class="mono">v</span> added on top. <span class="src paper">paper</span></p>
+
+  <div class="eq">
+    y = x + v
+    <span class="where">y = what the camera gave you · x = the clean image you want · v = the noise</span>
+  </div>
+
+  <p>The standard assumption is that <span class="mono">v</span> is <strong>additive white Gaussian noise (AWGN)</strong> with standard deviation <span class="mono">σ</span>. <span class="src paper">paper</span> Unpacking that term one word at a time:</p>
+
+  <div class="grid2">
+    <div class="card"><h4>Additive</h4><p>The noise is <em>added</em> to each pixel, not multiplied or blended. Pixel 200 becomes 200 + (something random).</p></div>
+    <div class="card"><h4>White</h4><p>Each pixel's noise is independent of its neighbours' — no spatial pattern, no correlation.</p></div>
+    <div class="card"><h4>Gaussian</h4><p>The random amounts follow a bell curve: small errors are common, huge errors are rare.</p></div>
+    <div class="card"><h4>σ (sigma)</h4><p>The width of that bell curve — the <em>noise level</em>. σ = 15 is mild grain; σ = 50 is severe. These are the three levels the DnCNN paper benchmarks. <span class="src paper">paper</span></p></div>
+  </div>
+
+  <h3>Why this is genuinely hard: the problem is ill-posed</h3>
+  <p>Your deck states this as the key insight of the whole field: <strong>denoising is ill-posed — infinitely many clean images could produce the same noisy observation.</strong> <span class="src deck">your deck</span></p>
+
+  <div class="imagine">
+    <p><b>Imagine that…</b> I tell you two numbers add up to 10 and ask you which two. 5+5? 3+7? 9.7+0.3? There are infinitely many answers. That is exactly the denoiser's situation: given <span class="mono">y</span>, any split into <span class="mono">x + v</span> is arithmetically valid. The algorithm must <em>choose</em>, and it chooses using a prior — an assumption about which <span class="mono">x</span> looks like a real photograph.</p>
+  </div>
+
+  <p>The classical Bayesian formulation your deck shows makes that choice explicit: <span class="src deck">your deck</span></p>
+
+  <div class="eq">
+    x̂ = arg min<sub>x</sub> &nbsp; ½‖y − x‖² &nbsp; + &nbsp; λ·Φ(x)
+    <span class="where">left term = stay close to what the camera saw (data fidelity) · right term = look like a real image (the prior) · λ = how much you trust the prior</span>
+  </div>
+
+  <p>Every classical denoiser is a different guess at what Φ should be. DnCNN's radical move was to stop guessing Φ and let a neural network learn it implicitly from data. <span class="src deck">your deck</span></p>
+
+  <h3>Why anyone cares</h3>
+  <p>Your deck lists the applications: medical imaging (MRI, CT), satellite and remote-sensing imagery, surveillance and security, smartphone and consumer photography, and — importantly — <strong>preprocessing for higher-level vision tasks</strong>. <span class="src deck">your deck</span></p>
+  <p>That last one is the argument to lead with in your introduction. Denoising is rarely the final product; it is the cleanup step that makes segmentation, detection, and classification work at all. The DnCNN paper opens the same way, calling denoising <em>an indispensable step in many practical applications</em>. <span class="src paper">paper</span></p>
+</section>
+
+<!-- ================= 4 PLAYGROUND ================= -->
+<section id="playground" class="reveal">
+  <h2><span class="num">04</span> Interactive — feel the noise, feel the trade-off</h2>
+  <p class="sub">Drag the sliders. This is a real computation running in your browser.</p>
+
+  <div class="note">
+    <p>Everything below is generated live: a synthetic clean image, real Gaussian noise via the Box–Muller transform, a real Gaussian blur filter, and a real PSNR calculation. <strong>It is not DnCNN</strong> — it is the classical smoothing approach, shown here so you can <em>see</em> the exact weakness that motivated deep denoisers. <span class="src aid">study aid</span></p>
+  </div>
+
+  <div class="card">
+    <div class="ctrl">
+      <label for="sig">Noise level σ</label>
+      <input type="range" id="sig" min="0" max="70" value="25" step="1">
+      <span class="val" id="sigv">25</span>
+    </div>
+    <div class="ctrl">
+      <label for="rad">Filter strength</label>
+      <input type="range" id="rad" min="0" max="4" value="1" step="1">
+      <span class="val" id="radv">1</span>
+    </div>
+
+    <div class="play">
+      <figure><canvas id="cClean" width="128" height="128"></canvas>
+        <figcaption><b>Clean · x</b>The ground truth. In training, you have this.</figcaption></figure>
+      <figure><canvas id="cNoisy" width="128" height="128"></canvas>
+        <figcaption><b>Noisy · y = x + v</b><span id="pNoisy">PSNR —</span></figcaption></figure>
+      <figure><canvas id="cDen" width="128" height="128"></canvas>
+        <figcaption><b>Classical filter · x̂</b><span id="pDen">PSNR —</span></figcaption></figure>
+      <figure><canvas id="cRes" width="128" height="128"></canvas>
+        <figcaption><b>Residual · ŷ − x̂</b>What the filter removed (amplified ×3).</figcaption></figure>
+    </div>
+  </div>
+
+  <h3>What to notice — and why it matters for your deck</h3>
+  <ul>
+    <li><strong>Push σ up.</strong> PSNR of the noisy image collapses. The image is still "there", but measurably destroyed.</li>
+    <li><strong>Now push the filter strength up.</strong> PSNR improves — but look at the edges of the shapes. They soften. The circle's boundary turns into a gradient. <em>That is over-smoothing.</em></li>
+    <li><strong>Look at the residual panel.</strong> A perfect denoiser's residual would be pure random static with no visible structure. When you crank the filter, you can see the <em>outlines of the shapes</em> bleeding into the residual — proof the filter is deleting real signal, not just noise.</li>
+  </ul>
+
+  <div class="good">
+    <p><strong>This is the entire narrative arc of your project in one interaction.</strong> Classical methods trade sharpness for smoothness because they use a hand-designed prior. The DnCNN paper reports exactly this failure mode: BM3D, WNNM, EPLL and MLP <strong>tend to produce over-smooth edges and textures</strong>, while TNRD is <strong>likely to generate artifacts in the smooth region</strong>. <span class="src paper">paper</span> A learned prior escapes the trade-off — it can be sharp <em>and</em> clean, because it has seen millions of examples of what "sharp and clean" looks like.</p>
+  </div>
+</section>
+
+<!-- ================= 5 CONCEPTS ================= -->
+<section id="concepts" class="reveal">
+  <h2><span class="num">05</span> Vocabulary you must own before you start</h2>
+  <p class="sub">Every term you will meet, defined once, plainly. Open the ones you need.</p>
+
+  <details>
+    <summary>Convolution &amp; convolutional filter (kernel)</summary>
+    <div class="body">
+      <p><strong>Intuitively:</strong> slide a small window (say 3×3) across the image. At every position, multiply the 9 pixels under the window by 9 fixed weights and add them up. That single number becomes the output pixel. Different weights detect different things — one set finds horizontal edges, another finds blobs, another blurs.</p>
+      <p><strong>Technically:</strong> a linear, translation-invariant operator. The same 9 weights are reused at every position, which is why a CNN has far fewer parameters than a fully connected network and why it works regardless of <em>where</em> in the image a pattern appears.</p>
+      <p>DnCNN uses <span class="mono">3×3</span> filters throughout, with <strong>64 feature maps</strong> per hidden layer. <span class="src paper">paper</span></p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Feature map</summary>
+    <div class="body">
+      <p>The output of one filter applied across the whole image — a new "image" where bright pixels mean "this filter's pattern is strongly present here". 64 filters produce 64 feature maps stacked like a deck of cards. The next layer's filters look at all 64 at once (hence <span class="mono">3×3×64</span>).</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>ReLU — the nonlinearity</summary>
+    <div class="body">
+      <p><strong>Intuitively:</strong> "keep positives, zero out negatives." Written <span class="mono">max(0, ·)</span>. <span class="src paper">paper</span></p>
+      <p><strong>Why it must exist:</strong> stacking two linear operations gives you another linear operation — 17 convolution layers with no nonlinearity between them would be mathematically equivalent to a single convolution layer. ReLU is what makes depth actually buy you anything.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Pooling — and why DnCNN removes it</summary>
+    <div class="body">
+      <p>Pooling shrinks an image (e.g. replace every 2×2 block with its maximum). In classification that is desirable — you want "is there a cat?", not "where exactly is each whisker?". In denoising it is <em>catastrophic</em>: you must output one clean pixel for every input pixel, so throwing away spatial resolution destroys the very thing you are producing.</p>
+      <p>DnCNN follows the VGG principle of 3×3 filters but <strong>removes all pooling layers</strong>. <span class="src paper">paper</span></p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Receptive field</summary>
+    <div class="body">
+      <p><strong>Intuitively:</strong> how much of the original image one output pixel is allowed to "see". A single 3×3 layer sees a 3×3 window. Stack two, and the second layer's output depends on a 5×5 window. Stack many and the window grows steadily.</p>
+      <p>Because there is no pooling, the relationship is exact: <strong>a DnCNN of depth d has receptive field (2d+1)×(2d+1)</strong>. <span class="src paper">paper</span> Play with this in §15.</p>
+      <p><strong>Why it matters:</strong> to know whether a dark pixel is noise or a real shadow, you need context. More noise → you need more context. The paper explicitly notes that high noise levels usually require a larger effective patch size. <span class="src paper">paper</span></p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Batch normalization (BN)</summary>
+    <div class="body">
+      <p><strong>The problem it solves:</strong> as training updates the early layers, the distribution of numbers arriving at the later layers keeps shifting. Those later layers are chasing a moving target. This is called <strong>internal covariate shift</strong>. <span class="src paper">paper</span></p>
+      <p><strong>The fix:</strong> before the nonlinearity in each layer, normalise the activations across the mini-batch, then apply a learned scale and shift. Only two parameters per activation are added, and they train by back-propagation. <span class="src paper">paper</span></p>
+      <p><strong>Analogy:</strong> grading exams where the difficulty changes every week. BN converts raw scores into z-scores so downstream decisions stay meaningful regardless of that week's difficulty.</p>
+      <p>Benefits the paper lists: fast training, better performance, low sensitivity to initialization. <span class="src paper">paper</span></p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Residual learning</summary>
+    <div class="body">
+      <p><strong>Intuitively:</strong> instead of asking the network "draw me the clean image", ask it "draw me only the dirt". Then subtract the dirt. Drawing dirt is a much smaller, simpler job than redrawing an entire photograph.</p>
+      <p><strong>Technically:</strong> the network learns a residual mapping <span class="mono">R(y) ≈ v</span>, and the clean image is recovered as <span class="mono">x = y − R(y)</span>. <span class="src paper">paper</span></p>
+      <p>Full treatment in §13 — this is the single most important idea in your paper.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>PSNR — Peak Signal-to-Noise Ratio</summary>
+    <div class="body">
+      <div class="eq">PSNR = 10 · log₁₀( MAX² / MSE ) &nbsp; dB<span class="where">MAX = maximum pixel value (255 for 8-bit) · MSE = mean squared error vs. ground truth</span></div>
+      <p>Higher is better. It is the standard metric for low-level vision. Because of the logarithm the scale is compressed: your deck notes that <strong>a 0.5 dB improvement is considered significant</strong>, and that PSNR is pixel-wise so it <strong>may not match visual perception</strong>. <span class="src deck">your deck</span></p>
+      <p>Calibration you should memorise for the defence: the DnCNN paper cites prior work finding that <strong>few methods can outperform BM3D by more than 0.3 dB on average</strong> — and DnCNN-S beats it by 0.6 dB at all three noise levels. <span class="src paper">paper</span></p>
+    </div>
+  </details>
+
+  <details>
+    <summary>SSIM — Structural Similarity Index</summary>
+    <div class="body">
+      <p>A metric combining luminance, contrast and structure comparisons, on a range of <span class="mono">[0, 1]</span> where 1 means identical. It considers structural information rather than only pixel error, and correlates better with human visual perception than PSNR. <span class="src deck">your deck</span></p>
+      <p><strong>Why report both:</strong> PSNR can be gamed by blurring (blur lowers MSE on noisy images); SSIM punishes the loss of structure that blurring causes. Reporting both is the honest thing to do — and the brief explicitly asks for comparative analysis using PSNR and SSIM. <span class="src pdf">assignment</span></p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Blind vs. non-blind denoising</summary>
+    <div class="body">
+      <p><strong>Non-blind:</strong> you tell the algorithm the noise level σ in advance. Convenient in a paper; useless in a phone camera.</p>
+      <p><strong>Blind:</strong> the algorithm handles unknown σ on its own. Before DnCNN, the standard workaround was to <em>estimate</em> σ first and then load the matching model — which makes the final result hostage to the accuracy of that estimate. <span class="src paper">paper</span></p>
+      <p>DnCNN-B is trained across σ ∈ [0, 55] and needs no estimation step at all. <span class="src paper">paper</span></p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Discriminative vs. generative / prior-based methods</summary>
+    <div class="body">
+      <p><strong>Prior-based (generative-ish):</strong> write down a mathematical model of what images look like, then solve an optimisation problem at test time for each image. Powerful, but the paper identifies two drawbacks: the test-stage optimisation is <strong>time-consuming</strong>, and the models are <strong>non-convex with several manually chosen parameters</strong>. <span class="src paper">paper</span></p>
+      <p><strong>Discriminative:</strong> learn a direct input→output mapping from training pairs. No optimisation at test time — one forward pass. DnCNN is squarely in this camp.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Non-local self-similarity (NSS)</summary>
+    <div class="body">
+      <p>The observation that natural images repeat themselves: a brick in a wall looks like the other bricks; the stripes on Barbara's scarf look like each other. If you find many similar patches and average them, the noise (which is independent) cancels while the signal (which is shared) survives.</p>
+      <p>This is the engine behind BM3D and WNNM. <span class="src paper">paper</span> It is also precisely the prior DnCNN <em>lacks</em>, which explains its two documented failure cases — see §19.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Epoch, mini-batch, SGD, learning rate</summary>
+    <div class="body">
+      <ul>
+        <li><strong>Mini-batch:</strong> a small group of training examples (DnCNN uses 128 patches) processed together before one weight update.</li>
+        <li><strong>SGD:</strong> stochastic gradient descent — nudge every weight slightly in the direction that reduces the loss on this mini-batch.</li>
+        <li><strong>Epoch:</strong> one full pass over the training set.</li>
+        <li><strong>Learning rate:</strong> how big each nudge is. DnCNN decays it exponentially from 1e⁻¹ to 1e⁻⁴ across 50 epochs. <span class="src deck">your deck</span></li>
+        <li><strong>Momentum / weight decay:</strong> momentum 0.9, weight decay 1e⁻⁴. <span class="src deck">your deck</span></li>
+      </ul>
+    </div>
+  </details>
+</section>
+
+<!-- ================= 6 STAGES ================= -->
+<section id="stages" class="reveal">
+  <h2><span class="num">06</span> The 3-stage pipeline and your deadlines</h2>
+  <p class="sub">This is the skeleton of the entire assignment. Memorise it.</p>
+
+  <p>The brief divides the project into three distinct stages, and for each stage <strong>your group is required to present your progress to the Teaching Assistants</strong>. The brief describes these checkpoints as ensuring your research is on track, your sources are high-quality, and your final synthesis is cohesive. <span class="src pdf">assignment</span></p>
+
+  <div class="tl">
+    <div class="tl-item pulse">
+      <div class="date">DEADLINE · 11 AUG 2026</div>
+      <h4>TA Presentation 1 — Literature Review Pitch</h4>
+      <p><strong>Deliverable:</strong> a short slide deck detailing your selected topic, your exact list of 10+ sources, and a visual timeline mapping the evolution of the algorithms (e.g. Classical Math → CNN → Transformer). <span class="src pdf">assignment</span></p>
+      <p><strong>What the TAs evaluate:</strong> the rigor of your chosen papers, whether you meet the 70/30 split, and approval of your research direction. <span class="src pdf">assignment</span></p>
+    </div>
+    <div class="tl-item">
+      <div class="date">DEADLINE · 21 AUG 2026</div>
+      <h4>TA Presentation 2 — Practical Engineering &amp; Code Analysis</h4>
+      <p><strong>Deliverable:</strong> a presentation mapping the theories from your papers to specific GitHub / Hugging Face repositories. <span class="src pdf">assignment</span></p>
+      <p><strong>What you must show:</strong> that you understand the code structure, the modern loss functions being used, and the practical deployment realities of the SOTA models. <span class="src pdf">assignment</span></p>
+    </div>
+    <div class="tl-item">
+      <div class="date">DEADLINE · 31 AUG 2026</div>
+      <h4>TA Presentation 3 — Final Project Defense</h4>
+      <p><strong>Deliverable:</strong> the final PDF slide deck submitted for grading. <span class="src pdf">assignment</span></p>
+      <p><strong>Format:</strong> because a 4-hour presentation is impossible, you present a highly condensed executive summary of the massive deck, and you will be questioned on various parts of the full deck to verify your deep understanding. <span class="src pdf">assignment</span></p>
+    </div>
+  </div>
+
+  <div class="warn">
+    <p><strong>Read that last line again.</strong> The TAs may question you on <em>any</em> slide, including ones you never present. That has a direct consequence for how you build the deck: <strong>do not put anything on a slide that you cannot personally explain.</strong> A beautiful slide about an architecture nobody in the group understands is a liability, not an asset.</p>
+  </div>
+
+  <h3>How the stages feed each other</h3>
+  <div class="dia">
+    <svg viewBox="0 0 740 300" role="img" aria-label="Flow diagram of the three project stages">
+      <defs><marker id="ar2" markerWidth="10" markerHeight="10" refX="8" refY="3.5" orient="auto"><path d="M0,0 L8,3.5 L0,7 z" fill="#5eead4"/></marker></defs>
+      <g font-family="system-ui" font-size="12">
+        <rect x="30" y="26" width="200" height="106" rx="14" fill="#131a2a" stroke="#5eead4" stroke-width="1.5"/>
+        <text x="130" y="52" text-anchor="middle" fill="#5eead4" font-weight="800" font-size="13">STAGE 1</text>
+        <text x="130" y="73" text-anchor="middle" fill="#e6ebf5" font-weight="600">Literature review</text>
+        <text x="130" y="93" text-anchor="middle" fill="#a8b4cc">10+ sources, 70/30</text>
+        <text x="130" y="111" text-anchor="middle" fill="#a8b4cc">evolution timeline</text>
+
+        <rect x="270" y="26" width="200" height="106" rx="14" fill="#131a2a" stroke="#818cf8" stroke-width="1.5"/>
+        <text x="370" y="52" text-anchor="middle" fill="#818cf8" font-weight="800" font-size="13">STAGE 2</text>
+        <text x="370" y="73" text-anchor="middle" fill="#e6ebf5" font-weight="600">Code deep-dive</text>
+        <text x="370" y="93" text-anchor="middle" fill="#a8b4cc">GitHub · Hugging Face</text>
+        <text x="370" y="111" text-anchor="middle" fill="#a8b4cc">PapersWithCode</text>
+
+        <rect x="510" y="26" width="200" height="106" rx="14" fill="#131a2a" stroke="#f472b6" stroke-width="1.5"/>
+        <text x="610" y="52" text-anchor="middle" fill="#f472b6" font-weight="800" font-size="13">STAGE 3</text>
+        <text x="610" y="73" text-anchor="middle" fill="#e6ebf5" font-weight="600">Unified master deck</text>
+        <text x="610" y="93" text-anchor="middle" fill="#a8b4cc">2–4 hours of depth</text>
+        <text x="610" y="111" text-anchor="middle" fill="#a8b4cc">one cohesive story</text>
+
+        <line x1="232" y1="79" x2="266" y2="79" stroke="#5eead4" stroke-width="2" marker-end="url(#ar2)"/>
+        <line x1="472" y1="79" x2="506" y2="79" stroke="#5eead4" stroke-width="2" marker-end="url(#ar2)"/>
+
+        <path d="M130 134 L130 180" stroke="#243049" stroke-width="1.5" stroke-dasharray="4 4"/>
+        <path d="M370 134 L370 180" stroke="#243049" stroke-width="1.5" stroke-dasharray="4 4"/>
+        <path d="M610 134 L610 180" stroke="#243049" stroke-width="1.5" stroke-dasharray="4 4"/>
+
+        <rect x="45" y="182" width="170" height="52" rx="10" fill="#0f1522" stroke="#fbbf24" stroke-width="1.2"/>
+        <text x="130" y="203" text-anchor="middle" fill="#fbbf24" font-size="11" font-weight="700">TA DEFENCE 1</text>
+        <text x="130" y="221" text-anchor="middle" fill="#a8b4cc" font-size="11">11 Aug 2026</text>
+
+        <rect x="285" y="182" width="170" height="52" rx="10" fill="#0f1522" stroke="#fbbf24" stroke-width="1.2"/>
+        <text x="370" y="203" text-anchor="middle" fill="#fbbf24" font-size="11" font-weight="700">TA DEFENCE 2</text>
+        <text x="370" y="221" text-anchor="middle" fill="#a8b4cc" font-size="11">21 Aug 2026</text>
+
+        <rect x="525" y="182" width="170" height="52" rx="10" fill="#0f1522" stroke="#fbbf24" stroke-width="1.2"/>
+        <text x="610" y="203" text-anchor="middle" fill="#fbbf24" font-size="11" font-weight="700">TA DEFENCE 3</text>
+        <text x="610" y="221" text-anchor="middle" fill="#a8b4cc" font-size="11">31 Aug 2026</text>
+
+        <rect x="45" y="256" width="650" height="34" rx="10" fill="none" stroke="#243049" stroke-dasharray="5 4"/>
+        <text x="370" y="278" text-anchor="middle" fill="#7c89a6" font-size="11.5">Stage 3 = Stage 1 (history) + Stage 2 (engineering), merged into one cohesive narrative</text>
+      </g>
+    </svg>
+    <div class="cap">Fig. C — Stage dependencies and checkpoint dates, all taken from the assignment brief. <span class="src pdf">assignment</span></div>
+  </div>
+</section>
+
+<!-- ================= 7 STAGE 1 ================= -->
+<section id="stage1" class="reveal">
+  <h2><span class="num">07</span> Stage 1 — Exhaustive literature review &amp; timeline</h2>
+  <p class="sub">The rules here are numeric and non-negotiable. Get them exactly right.</p>
+
+  <p>The stated task: map the academic landscape of your assigned topic — trace how the problem was solved in the past using classical DIP, the bottlenecks that arose, and how modern researchers are solving it today. <span class="src pdf">assignment</span></p>
+
+  <h3>The source quota — exact wording</h3>
+  <div class="grid2">
+    <div class="card glow">
+      <h4>Category A — minimum 70%</h4>
+      <p>Peer-reviewed academic papers, sourced from top-tier journals and conferences. The brief names <strong>IEEE TPAMI, CVPR, ICCV, ECCV, NeurIPS, MICCAI</strong> as examples. You must include a mix of older milestone papers and <strong>recent SOTA publications (2022–present)</strong>. <span class="src pdf">assignment</span></p>
+    </div>
+    <div class="card">
+      <h4>Category B — maximum 30%</h4>
+      <p>Reputable auxiliary materials: textbook chapters, recognised academic lectures (the brief names <strong>Stanford CS231n, MIT OpenCourseWare</strong>), or highly technical developer blogs from industry leaders (it names <strong>Google Research, Meta AI</strong>). <span class="src pdf">assignment</span></p>
+    </div>
+  </div>
+
+  <p>The floor is <strong>a minimum of 10 distinct, high-quality sources</strong>. <span class="src pdf">assignment</span> Combining the two rules gives you concrete arithmetic:</p>
+
+  <div class="tw">
+    <table>
+      <thead><tr><th>If you cite…</th><th>Category A needed (≥70%)</th><th>Category B allowed (≤30%)</th></tr></thead>
+      <tbody>
+        <tr class="hl"><td>10 sources</td><td class="best">7 papers</td><td>3 auxiliary</td></tr>
+        <tr><td>12 sources</td><td class="best">9 papers (8.4 → round up)</td><td>3 auxiliary</td></tr>
+        <tr><td>14 sources</td><td class="best">10 papers</td><td>4 auxiliary</td></tr>
+        <tr><td>15 sources</td><td class="best">11 papers (10.5 → round up)</td><td>4 auxiliary</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p style="font-size:.87rem;color:var(--txt-3)">Table 1 — Arithmetic consequence of the 70/30 rule at common source counts. Always round Category A <em>up</em>: 70% is a floor, not a target. <span class="src aid">study aid</span></p>
+
+  <h3>The goal, in the brief's own framing</h3>
+  <p>It is stated as a warning: <strong>do not merely summarize the papers.</strong> You must establish a chronological and thematic connection between them, explicitly highlighting the path from classical algorithms to modern SOTA — the brief asks specifically how the field transitioned from spatial filtering to CNNs, and eventually to Vision Transformers. <span class="src pdf">assignment</span></p>
+
+  <div class="note">
+    <p><strong>Practical reading of that requirement.</strong> For each source in your list, write one sentence of the form: <em>"X existed because Y was broken; X was then superseded because Z."</em> If you can write that sentence for all 10+ sources and the sentences chain together, you have a timeline. If they don't chain, you have a bibliography — and the brief has already told you that isn't enough.</p>
+  </div>
+
+  <h3>Mapping this onto denoising specifically</h3>
+  <p>Your two available sources already hand you a substantial, verifiable candidate list. The following methods appear by name with venue and year in the DnCNN paper's reference list and in your deck's reference slide: <span class="src paper">paper</span> <span class="src deck">your deck</span></p>
+
+  <div class="tw">
+    <table>
+      <thead><tr><th>Method / work</th><th>Venue &amp; year</th><th>Role in the story</th><th>Era</th></tr></thead>
+      <tbody>
+        <tr><td>Non-local means (Buades et al.)</td><td>CVPR 2005</td><td>Introduced the non-local self-similarity idea</td><td>Classical</td></tr>
+        <tr><td>K-SVD (Elad &amp; Aharon)</td><td>IEEE TIP 2006</td><td>Sparse / learned-dictionary prior</td><td>Classical</td></tr>
+        <tr class="hl"><td><b>BM3D</b> (Dabov et al.)</td><td>IEEE TIP 2007</td><td>The benchmark everyone had to beat for a decade</td><td>Classical</td></tr>
+        <tr><td>EPLL (Zoran &amp; Weiss)</td><td>ICCV 2011</td><td>Patch-prior generative approach</td><td>Classical</td></tr>
+        <tr><td>MLP (Burger et al.)</td><td>CVPR 2012</td><td>First convincing "plain neural net vs BM3D" result</td><td>Early learning</td></tr>
+        <tr><td>WNNM (Gu et al.)</td><td>CVPR 2014</td><td>Non-local + low-rank; very strong, very slow</td><td>Classical peak</td></tr>
+        <tr><td>CSF (Schmidt &amp; Roth)</td><td>CVPR 2014</td><td>Unrolled optimisation into a trainable model</td><td>Bridge</td></tr>
+        <tr><td>TNRD (Chen &amp; Pock)</td><td>IEEE TPAMI 2016</td><td>Unrolled diffusion; DnCNN's direct theoretical ancestor</td><td>Bridge</td></tr>
+        <tr class="best"><td><b>DnCNN</b> (Zhang et al.)</td><td>IEEE TIP 2017</td><td>Your anchor: residual learning + BN, blind + multi-task</td><td>Deep CNN</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p style="font-size:.87rem;color:var(--txt-3)">Table 2 — Candidate Category-A backbone, assembled from citations present in the paper and your deck. Venues and years are as printed in those reference lists. <span class="src paper">paper</span> <span class="src deck">your deck</span></p>
+
+  <div class="warn">
+    <p><strong>Critical gap you must close yourself.</strong> Every work in Table 2 predates 2018. The brief demands recent SOTA publications from <strong>2022–present</strong>. <span class="src pdf">assignment</span> Your deck's "future directions" slide names promising directions — SwinIR, Restormer, DRUNet, FFDNet, CBDNet, SCUNet, NLRN, Noise2Noise, Noise2Void, ESRGAN — but names them as directions, without full citations. <span class="src deck">your deck</span></p>
+    <p>You must locate the actual publications for whichever of these you choose, verify venue and year yourself, and cite them properly. <strong>This guide deliberately does not supply those citation details, because they were not present in the provided files and guessing them would be fabrication.</strong> Search each name on the venue's own proceedings site or on the authors' pages.</p>
+  </div>
+
+  <h3>Deliverable checklist for 11 Aug</h3>
+  <ul>
+    <li>A short slide deck (not the master deck).</li>
+    <li>Your selected topic, stated explicitly.</li>
+    <li>Your exact list of 10+ sources, with the Category A / B split visible so the TAs can verify 70/30 at a glance.</li>
+    <li>A visual timeline of algorithm evolution, in the style <span class="mono">Classical Math → CNN → Transformer</span>. <span class="src pdf">assignment</span></li>
+  </ul>
+</section>
+
+<!-- ================= 8 STAGE 2 ================= -->
+<section id="stage2" class="reveal">
+  <h2><span class="num">08</span> Stage 2 — Practical synthesis &amp; modern engineering</h2>
+  <p class="sub">Where most groups underperform, because reading code is harder than reading abstracts.</p>
+
+  <p>The framing in the brief: modern image processing is not just mathematical theory — it is software engineering, framework optimization, and open-source deployment. This stage bridges the academic papers of Stage 1 to real-world implementation. <span class="src pdf">assignment</span></p>
+
+  <h3>The two required activities</h3>
+
+  <div class="card">
+    <h4>1 · Identify the modern standard</h4>
+    <p>Determine what the current industry and academic standard is for your topic, and <strong>clearly contrast how these modern architectures solve the problems that classical DIP algorithms struggled with</strong>. <span class="src pdf">assignment</span></p>
+  </div>
+
+  <div class="card">
+    <h4>2 · Codebase &amp; repository analysis</h4>
+    <p>Find and analyse practical open-source implementations. The brief names <strong>GitHub, Hugging Face, and PapersWithCode</strong> as the platforms to explore, states that you are <strong>not required to code a new architecture from scratch</strong>, but that you <strong>are required to perform a "code deep-dive"</strong>. <span class="src pdf">assignment</span></p>
+    <p>Specifically, you must explain: how these modern models are structured; what frameworks they use (PyTorch / TensorFlow); how their data pipelines work; and how pre-trained weights are utilized today compared to older, manual feature-extraction methods. <span class="src pdf">assignment</span></p>
+  </div>
+
+  <h3>The one repository link that is verified in your sources</h3>
+  <p>The DnCNN paper states that the testing code of the DnCNN models can be downloaded at <a href="https://github.com/cszn/DnCNN" target="_blank" rel="noopener">https://github.com/cszn/DnCNN</a>. <span class="src paper">paper</span> The paper is also on arXiv as <span class="mono">arXiv:1608.03981</span>. <span class="src paper">paper</span></p>
+
+  <div class="danger">
+    <p><strong>Deliberate omission.</strong> No other repository URLs appear anywhere in the three provided documents. This guide will not invent them — a broken or wrong link in front of a TA is worse than no link. Find modern denoising repositories yourself by searching the model names on GitHub, Hugging Face and PapersWithCode, then record the exact URL, the commit or release you inspected, and the date you inspected it.</p>
+  </div>
+
+  <h3>What a "code deep-dive" actually looks like</h3>
+  <p>The brief lists four things to explain. Here is a concrete question set that produces answers for each — use it as an interrogation checklist per repository. <span class="src aid">study aid</span></p>
+
+  <div class="grid2">
+    <div class="card">
+      <h4>Structure</h4>
+      <ul style="margin-bottom:0">
+        <li>Where is the model class defined? What are its constructor arguments?</li>
+        <li>How is a "block" defined, and how many are stacked?</li>
+        <li>What does the forward pass return — the clean image or the residual?</li>
+        <li>Where is the config / options file, and what does it control?</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>Framework</h4>
+      <ul style="margin-bottom:0">
+        <li>PyTorch or TensorFlow? Which version is pinned?</li>
+        <li>Is <code>nn.Module</code> subclassed directly, or is there a registry/factory?</li>
+        <li>Is mixed precision / <code>torch.compile</code> / distributed training used?</li>
+        <li>How is the device (CPU/GPU) selected?</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>Data pipeline</h4>
+      <ul style="margin-bottom:0">
+        <li>What <code>Dataset</code> class is used, and what does <code>__getitem__</code> return?</li>
+        <li>Where is noise added — offline on disk, or on-the-fly per sample?</li>
+        <li>What augmentations (crop, flip, rotate) and what patch size?</li>
+        <li>Batch size, number of workers, shuffling?</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>Pre-trained weights</h4>
+      <ul style="margin-bottom:0">
+        <li>Where are weights hosted, and how are they downloaded?</li>
+        <li>What is the checkpoint format, and how is it loaded (strict or not)?</li>
+        <li>Is there a Hugging Face model card? What does it claim?</li>
+        <li>How does inference handle images that are not a multiple of the network's stride?</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>The comparison that earns the marks</h3>
+  <p>The brief asks you to contrast modern weight-reuse with <em>older, manual feature-extraction methods</em>. <span class="src pdf">assignment</span> Your sources give you a perfect concrete pair for that contrast:</p>
+
+  <div class="tw">
+    <table>
+      <thead><tr><th>Dimension</th><th>Classical era (e.g. BM3D, WNNM)</th><th>Deep era (e.g. DnCNN and successors)</th></tr></thead>
+      <tbody>
+        <tr><td>Where the prior lives</td><td>Hand-written in the algorithm (Φ in the objective)</td><td>Learned into weights; DnCNN has no explicit prior <span class="src deck">deck</span></td></tr>
+        <tr><td>Test-time work</td><td>Solve an optimisation problem per image <span class="src paper">paper</span></td><td>One feed-forward pass</td></tr>
+        <tr><td>Parameter tuning</td><td>Several manually chosen parameters <span class="src paper">paper</span></td><td>Trained end-to-end by SGD</td></tr>
+        <tr><td>Reuse across images</td><td>Nothing is reused; every image restarts</td><td>Weights are downloaded once and reused forever</td></tr>
+        <tr class="best"><td>512×512 runtime</td><td>BM3D 2.85 s · WNNM 773 s <span class="src paper">paper</span></td><td>DnCNN-B 0.060 s on GPU <span class="src paper">paper</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p style="font-size:.87rem;color:var(--txt-3)">Table 3 — The classical-vs-deep engineering contrast, using the runtime figures reported in Table IV of the paper.</p>
+</section>
+
+<!-- ================= 9 STAGE 3 ================= -->
+<section id="stage3" class="reveal">
+  <h2><span class="num">09</span> Stage 3 — The "deep-understanding" unified deck</h2>
+  <p class="sub">The final deliverable, and the one with the most unusual requirements.</p>
+
+  <p>For the final deliverable you combine your historical research (Stage 1) and your practical code analysis (Stage 2) into a single, cohesive, highly detailed master presentation. <span class="src pdf">assignment</span></p>
+
+  <div class="grid3">
+    <div class="stat"><div class="v" data-count="4" data-suffix="h">0</div><div class="k">Depth target</div><div class="d">The depth, density and flow must equal a <strong>2 to 4-hour advanced lecture</strong>. <span class="src pdf">assignment</span></div></div>
+    <div class="stat"><div class="v">PDF</div><div class="k">Format</div><div class="d">Submitted as a final PDF slide deck. <span class="src pdf">assignment</span></div></div>
+    <div class="stat"><div class="v">1</div><div class="k">Story</div><div class="d">It must tell <strong>the complete evolutionary story</strong> of your domain. <span class="src pdf">assignment</span></div></div>
+  </div>
+
+  <p>The purpose is stated memorably in the brief: the deck serves as a <strong>standalone educational artifact</strong>. If an incoming graduate student wanted to learn everything about your topic — from its classical mathematical origins to downloading its modern weights on Hugging Face — your slide deck should be their ultimate guide. <span class="src pdf">assignment</span></p>
+
+  <p>And on cohesion: the deck must flow logically; it <strong>cannot read like 10 disconnected paper summaries</strong> and must constantly reference back to how the field has evolved. <span class="src pdf">assignment</span></p>
+
+  <h3>The recommended structure — verbatim from the brief</h3>
+  <p>The brief supplies a seven-part structural flow to hit the masterclass requirement "without relying on filler content". <span class="src pdf">assignment</span> Treat this as your table of contents.</p>
+
+  <div class="tw">
+    <table>
+      <thead><tr><th>#</th><th>Section</th><th>What the brief says it must contain</th><th>Your denoising version</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>Introduction &amp; Problem Definition</td><td>Define the task; why it matters; the inherent mathematical or visual challenges</td><td><span class="mono">y = x + v</span>, ill-posedness, applications</td></tr>
+        <tr><td>2</td><td>The Classical DIP Foundation</td><td>Traditional algorithms you presented in class; the original mathematical solution; its limitations (hard-coded thresholds, inability to handle complex noise)</td><td>Filtering → NLM → BM3D → WNNM; the Bayesian objective; slow test-time optimisation</td></tr>
+        <tr><td>3</td><td>The Deep Learning Transition</td><td>Early structural shifts bridging classical and modern</td><td>MLP, CSF, TNRD → DnCNN; "unrolling" as the conceptual bridge</td></tr>
+        <tr><td>4</td><td>The Modern State-of-the-Art</td><td>Best methods today; modern architectures, attention mechanisms, advanced training paradigms</td><td>Attention / transformer / U-Net denoisers, self-supervised training — <em>you must source these</em></td></tr>
+        <tr><td>5</td><td>Practical Deep-Dive</td><td>Screenshots, snippets and architectural diagrams from modern GitHub / Hugging Face repos; how models are coded, trained, deployed</td><td>Output of your Stage 2 work</td></tr>
+        <tr><td>6</td><td>Comparative Analysis</td><td>Visual and quantitative comparisons (<strong>PSNR, SSIM, IoU</strong>) showing the leap from classical to SOTA</td><td>PSNR/SSIM tables; IoU is not applicable to denoising — say so explicitly</td></tr>
+        <tr><td>7</td><td>Future Directions &amp; Conclusion</td><td>Current unsolved problems in the domain</td><td>Real-world noise, perceptual quality, efficiency</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p style="font-size:.87rem;color:var(--txt-3)">Table 4 — The brief's recommended deck structure (columns 2–3 <span class="src pdf">assignment</span>) with a suggested denoising mapping (column 4 <span class="src aid">study aid</span>).</p>
+
+  <div class="note">
+    <p><strong>On the IoU mention.</strong> The brief lists PSNR, SSIM and IoU as example comparison metrics, because it is written generically for many topics. IoU (Intersection-over-Union) measures region overlap and belongs to segmentation and detection, not denoising. Do not force it in. A single line — <em>"IoU is not a meaningful denoising metric; we report PSNR and SSIM, which are the standard for low-level vision"</em> — shows judgement rather than sloppiness. <span class="src aid">study aid</span></p>
+  </div>
+
+  <details>
+    <summary>How many slides is "2 to 4 hours"? — a sizing estimate</summary>
+    <div class="body">
+      <p>The brief specifies depth in <em>hours of content</em>, not slide count, and never states a number of slides. <span class="src pdf">assignment</span> The following is arithmetic, not a requirement. <span class="src aid">study aid</span></p>
+      <p>An advanced technical lecture typically sustains roughly 1.5–2.5 minutes per slide when slides are dense. At 2 minutes per slide:</p>
+      <ul>
+        <li>2 hours ≈ 60 slides</li>
+        <li>3 hours ≈ 90 slides</li>
+        <li>4 hours ≈ 120 slides</li>
+      </ul>
+      <p>Your current DnCNN deck is 33 slides covering one paper. <span class="src deck">your deck</span> So the master deck is plausibly <strong>2–4× larger</strong> than what you already have — and the growth must come from the eras <em>before and after</em> DnCNN, plus the code deep-dive, not from padding the DnCNN section.</p>
+      <p><strong>Confirm the expected size with your TA.</strong> This estimate is a planning aid only.</p>
+    </div>
+  </details>
+</section>
+
+<!-- ================= 10 GRADING ================= -->
+<section id="grading" class="reveal">
+  <h2><span class="num">10</span> Evaluation &amp; grading criteria</h2>
+  <p class="sub">Four criteria, stated explicitly in the brief. No weights are given.</p>
+
+  <div class="grid2">
+    <div class="card glow">
+      <h4>1 · Rigor of Research (Stage 1)</h4>
+      <p>The quality, relevance and difficulty of the 10+ selected sources, and your ability to accurately trace the classical-to-modern evolutionary path. <span class="src pdf">assignment</span></p>
+    </div>
+    <div class="card glow">
+      <h4>2 · Practical Integration (Stage 2)</h4>
+      <p>Your ability to analyse and explain complex, modern open-source repositories (GitHub / Hugging Face). <span class="src pdf">assignment</span></p>
+    </div>
+    <div class="card glow">
+      <h4>3 · Depth &amp; Cohesion (Stage 3)</h4>
+      <p>Whether the final deck successfully achieves the required 2-to-4-hour depth of a unified, comprehensive masterclass. <span class="src pdf">assignment</span></p>
+    </div>
+    <div class="card glow">
+      <h4>4 · TA Defenses</h4>
+      <p>Your performance, clarity, and ability to successfully answer technical questions during the three mandatory TA checkpoints. <span class="src pdf">assignment</span></p>
+    </div>
+  </div>
+
+  <div class="warn">
+    <p><strong>The brief does not state percentage weights for these four criteria.</strong> If you need them for planning, ask your TA — do not assume an even 25/25/25/25 split.</p>
+  </div>
+
+  <div class="note">
+    <p><strong>What criterion 4 implies about team strategy.</strong> Defence performance is graded separately from the artifacts. That means a group where one person builds all the slides and the others cannot answer questions loses marks on a criterion that has nothing to do with slide quality. Divide the <em>understanding</em>, not just the <em>work</em>: every member should be able to explain every section at a basic level, even if only one person authored it. <span class="src aid">study aid</span></p>
+  </div>
+</section>
+
+<!-- ================= 11 DNCNN ================= -->
+<section id="dncnn" class="reveal">
+  <h2><span class="num">11</span> DnCNN — the paper at the centre of your topic</h2>
+  <p class="sub">Read this section before Stage 2. Everything modern in denoising is a reaction to it.</p>
+
+  <p><strong>Full title:</strong> "Beyond a Gaussian Denoiser: Residual Learning of Deep CNN for Image Denoising", by Kai Zhang, Wangmeng Zuo, Yunjin Chen, Deyu Meng and Lei Zhang, IEEE Transactions on Image Processing, 2017 (arXiv:1608.03981). <span class="src paper">paper</span></p>
+
+  <h3>The state of the world before it</h3>
+  <p>The paper identifies two major drawbacks in prior-based methods: they involve a <strong>complex optimization problem in the testing stage</strong>, making denoising time-consuming; and the models are generally <strong>non-convex and involve several manually chosen parameters</strong>. <span class="src paper">paper</span></p>
+  <p>Discriminative learning methods (CSF, TNRD) removed the test-time iteration, but the paper notes their performance is <strong>inherently restricted to the specified forms of prior</strong> — their analysis-model priors are limited in capturing the full characteristics of image structures — and, critically, <strong>they train a specific model for a certain noise level and are limited in blind image denoising</strong>. <span class="src paper">paper</span></p>
+
+  <p>Your deck compresses this into three named limitations: <span class="src deck">your deck</span></p>
+  <div class="grid3">
+    <div class="stat"><div class="v">⏱</div><div class="k">Computational cost</div><div class="d">BM3D, WNNM: complex test-time optimisation — minutes per image</div></div>
+    <div class="stat"><div class="v">🔒</div><div class="k">Noise-specific</div><div class="d">CSF, TNRD, MLP: separate model per noise level — no blind denoising</div></div>
+    <div class="stat"><div class="v">◧</div><div class="k">Limited priors</div><div class="d">Analysis-model priors cannot capture full image structure</div></div>
+  </div>
+
+  <h3>The four research questions</h3>
+  <p>Your deck frames the paper as answering four questions: <span class="src deck">your deck</span></p>
+  <ol>
+    <li>Can a deep CNN with residual learning + batch normalization achieve superior denoising?</li>
+    <li>Can a single model handle unknown noise levels (blind denoising)?</li>
+    <li>Can one network handle denoising, super-resolution, and JPEG deblocking?</li>
+    <li>Can RL and BN mutually benefit each other for Gaussian denoising?</li>
+  </ol>
+  <p>The answer to all four turned out to be yes — and that is why this paper matters historically.</p>
+
+  <h3>The three contributions, in the authors' own framing</h3>
+  <p>The paper lists them as: (1) an end-to-end trainable deep CNN for Gaussian denoising that, unlike existing deep methods which directly estimate the latent clean image, adopts residual learning to remove the latent clean image from the noisy observation; (2) the finding that residual learning and batch normalization greatly benefit CNN learning, speeding up training and boosting performance; (3) that DnCNN extends easily to general image denoising — one model for blind Gaussian denoising, and one model for three tasks. <span class="src paper">paper</span></p>
+
+  <div class="imagine">
+    <p><b>Imagine that…</b> for a decade, every denoising researcher built a specialist: one tool for light noise, one for heavy noise, one for JPEG artifacts. DnCNN showed up with a single general-purpose tool that beat most of the specialists at their own jobs, and ran in 60 milliseconds. That is the reason your deck can claim it is cited 6,000+ times and established residual learning + BN as the standard denoising paradigm. <span class="src deck">your deck</span></p>
+  </div>
+</section>
+
+<!-- ================= 12 ARCHITECTURE ================= -->
+<section id="architecture" class="reveal">
+  <h2><span class="num">12</span> The architecture, layer by layer</h2>
+  <p class="sub">Simpler than you expect. That is the point.</p>
+
+  <p>The paper describes the design origin plainly: they <strong>modify the VGG network to make it suitable for image denoising</strong>, and set the depth based on the effective patch sizes used in state-of-the-art denoising methods. <span class="src paper">paper</span></p>
+
+  <p>Given depth <span class="mono">D</span>, there are exactly three layer types: <span class="src paper">paper</span></p>
+
+  <div class="dia">
+    <svg viewBox="0 0 780 300" role="img" aria-label="DnCNN layer-by-layer architecture diagram">
+      <defs>
+        <marker id="ar3" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#7c89a6"/></marker>
+        <linearGradient id="gb" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#1e293b"/><stop offset="100%" stop-color="#0f1522"/>
+        </linearGradient>
+      </defs>
+      <g font-family="system-ui" font-size="11">
+        <!-- input -->
+        <rect x="14" y="96" width="76" height="66" rx="9" fill="url(#gb)" stroke="#64748b" stroke-width="1.4"/>
+        <text x="52" y="122" text-anchor="middle" fill="#e6ebf5" font-weight="700" font-size="12">y</text>
+        <text x="52" y="140" text-anchor="middle" fill="#7c89a6">noisy input</text>
+
+        <!-- layer 1 -->
+        <rect x="112" y="88" width="104" height="82" rx="9" fill="#131a2a" stroke="#5eead4" stroke-width="1.5"/>
+        <text x="164" y="110" text-anchor="middle" fill="#5eead4" font-weight="700">Layer 1</text>
+        <text x="164" y="128" text-anchor="middle" fill="#e6ebf5">Conv + ReLU</text>
+        <text x="164" y="145" text-anchor="middle" fill="#a8b4cc">64 filters 3×3×c</text>
+        <text x="164" y="160" text-anchor="middle" fill="#7c89a6">no BN here</text>
+
+        <!-- middle -->
+        <rect x="238" y="80" width="240" height="98" rx="9" fill="#131a2a" stroke="#818cf8" stroke-width="1.5"/>
+        <text x="358" y="102" text-anchor="middle" fill="#818cf8" font-weight="700">Layers 2 … (D−1)</text>
+        <text x="358" y="121" text-anchor="middle" fill="#e6ebf5">Conv + BN + ReLU</text>
+        <text x="358" y="139" text-anchor="middle" fill="#a8b4cc">64 filters of size 3×3×64</text>
+        <text x="358" y="156" text-anchor="middle" fill="#a8b4cc">BN sits between conv and ReLU</text>
+        <text x="358" y="171" text-anchor="middle" fill="#7c89a6">repeated D−2 times</text>
+
+        <!-- last -->
+        <rect x="500" y="88" width="104" height="82" rx="9" fill="#131a2a" stroke="#f472b6" stroke-width="1.5"/>
+        <text x="552" y="110" text-anchor="middle" fill="#f472b6" font-weight="700">Layer D</text>
+        <text x="552" y="128" text-anchor="middle" fill="#e6ebf5">Conv only</text>
+        <text x="552" y="145" text-anchor="middle" fill="#a8b4cc">c filters 3×3×64</text>
+        <text x="552" y="160" text-anchor="middle" fill="#7c89a6">no BN, no ReLU</text>
+
+        <!-- residual out -->
+        <rect x="626" y="96" width="76" height="66" rx="9" fill="url(#gb)" stroke="#fbbf24" stroke-width="1.4"/>
+        <text x="664" y="122" text-anchor="middle" fill="#fbbf24" font-weight="700" font-size="12">v̂</text>
+        <text x="664" y="140" text-anchor="middle" fill="#7c89a6">predicted noise</text>
+
+        <line x1="92" y1="129" x2="108" y2="129" stroke="#7c89a6" stroke-width="1.5" marker-end="url(#ar3)"/>
+        <line x1="218" y1="129" x2="234" y2="129" stroke="#7c89a6" stroke-width="1.5" marker-end="url(#ar3)"/>
+        <line x1="480" y1="129" x2="496" y2="129" stroke="#7c89a6" stroke-width="1.5" marker-end="url(#ar3)"/>
+        <line x1="606" y1="129" x2="622" y2="129" stroke="#7c89a6" stroke-width="1.5" marker-end="url(#ar3)"/>
+
+        <!-- subtraction -->
+        <path d="M52 164 L52 244 L700 244 L700 176" fill="none" stroke="#5eead4" stroke-width="1.6" stroke-dasharray="6 4"/>
+        <circle cx="712" cy="129" r="15" fill="#0a0e17" stroke="#5eead4" stroke-width="1.6"/>
+        <text x="712" y="134" text-anchor="middle" fill="#5eead4" font-size="15" font-weight="800">−</text>
+        <text x="376" y="238" text-anchor="middle" fill="#5eead4" font-size="11">skip connection: the original noisy image y is carried forward</text>
+
+        <rect x="600" y="258" width="164" height="32" rx="8" fill="#131a2a" stroke="#5eead4" stroke-width="1.4"/>
+        <text x="682" y="279" text-anchor="middle" fill="#5eead4" font-weight="800" font-size="12">x̂ = y − v̂</text>
+
+        <text x="376" y="34" text-anchor="middle" fill="#e6ebf5" font-size="13" font-weight="700">DnCNN — three layer types, one global residual connection</text>
+        <text x="376" y="54" text-anchor="middle" fill="#7c89a6">c = 1 for grayscale, c = 3 for colour</text>
+      </g>
+    </svg>
+    <div class="cap">Fig. D — Layer composition redrawn from the paper's Section III-B description of Fig. 1. <span class="src paper">paper</span></div>
+  </div>
+
+  <h3>Design decisions and the reason for each</h3>
+  <div class="tw">
+    <table>
+      <thead><tr><th>Decision</th><th>Value</th><th>Reason</th></tr></thead>
+      <tbody>
+        <tr><td>Filter size</td><td class="mono">3 × 3</td><td>Following the VGG principle: many small filters give more nonlinearities with fewer parameters <span class="src paper">paper</span> <span class="src deck">deck</span></td></tr>
+        <tr><td>Feature maps</td><td class="mono">64</td><td>Width chosen for capacity/efficiency balance <span class="src paper">paper</span></td></tr>
+        <tr><td>Pooling</td><td class="mono">none</td><td>Preserves spatial resolution for pixel-level reconstruction <span class="src deck">deck</span></td></tr>
+        <tr><td>Padding</td><td class="mono">zero padding</td><td>Keeps every middle feature map the same size as the input; the paper reports this simple strategy produces <strong>no boundary artifacts</strong> <span class="src paper">paper</span></td></tr>
+        <tr><td>Output</td><td class="mono">residual v̂</td><td>Then <span class="mono">x̂ = y − v̂</span> <span class="src paper">paper</span></td></tr>
+        <tr class="hl"><td>Parameters</td><td class="mono">~556K</td><td>Tiny by modern standards — see the breakdown below <span class="src deck">deck</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p style="font-size:.87rem;color:var(--txt-3)">Table 5 — Architectural choices and their justifications.</p>
+
+  <details>
+    <summary>Parameter count, layer by layer (DnCNN-S, depth 17, grayscale)</summary>
+    <div class="body">
+      <p>Your deck gives the full breakdown: <span class="src deck">your deck</span></p>
+      <div class="tw"><table>
+        <thead><tr><th>Component</th><th>Shape</th><th>Parameters</th></tr></thead>
+        <tbody>
+          <tr><td>Layer 1</td><td class="mono">3×3×1×64</td><td class="mono">576</td></tr>
+          <tr><td>Layers 2–16</td><td class="mono">15 × (3×3×64×64)</td><td class="mono">552,960</td></tr>
+          <tr><td>Layer 17</td><td class="mono">3×3×64×1</td><td class="mono">576</td></tr>
+          <tr><td>BN parameters</td><td class="mono">15 × 2 × 64</td><td class="mono">1,920</td></tr>
+          <tr class="best"><td><b>Total</b></td><td></td><td class="mono"><b>~556K</b></td></tr>
+        </tbody>
+      </table></div>
+      <p><strong>The insight worth stating aloud in your defence:</strong> the overwhelming majority of parameters live in the 15 identical middle layers. The network is essentially one block repeated fifteen times. Its power comes from <em>depth and training strategy</em>, not architectural cleverness — which is exactly why the papers that came after it focused on adding architectural ideas (attention, multi-scale) rather than more of the same layers.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Reading DnCNN as code (conceptual sketch)</summary>
+    <div class="body">
+      <div class="warn"><p>The snippet below is written <strong>for this guide</strong> as a teaching illustration of the layer composition described in the paper. It is <strong>not</strong> copied from any repository and should not be presented as the official implementation. For Stage 2 you must read and cite the actual repository code. <span class="src aid">study aid</span></p></div>
+<pre><code><span class="c-com"># Conceptual sketch of the layer pattern described in the paper.</span>
+<span class="c-key">import</span> torch.nn <span class="c-key">as</span> nn
+
+<span class="c-key">class</span> <span class="c-fn">DnCNN</span>(nn.Module):
+    <span class="c-key">def</span> <span class="c-fn">__init__</span>(self, depth=<span class="c-num">17</span>, channels=<span class="c-num">64</span>, image_channels=<span class="c-num">1</span>):
+        super().__init__()
+        layers = []
+
+        <span class="c-com"># (i) first layer: Conv + ReLU, no BN</span>
+        layers += [nn.Conv2d(image_channels, channels, <span class="c-num">3</span>, padding=<span class="c-num">1</span>, bias=<span class="c-key">True</span>),
+                   nn.ReLU(inplace=<span class="c-key">True</span>)]
+
+        <span class="c-com"># (ii) middle layers: Conv + BN + ReLU</span>
+        <span class="c-key">for</span> _ <span class="c-key">in</span> range(depth - <span class="c-num">2</span>):
+            layers += [nn.Conv2d(channels, channels, <span class="c-num">3</span>, padding=<span class="c-num">1</span>, bias=<span class="c-key">False</span>),
+                       nn.BatchNorm2d(channels),
+                       nn.ReLU(inplace=<span class="c-key">True</span>)]
+
+        <span class="c-com"># (iii) last layer: Conv only</span>
+        layers += [nn.Conv2d(channels, image_channels, <span class="c-num">3</span>, padding=<span class="c-num">1</span>, bias=<span class="c-key">False</span>)]
+
+        self.body = nn.Sequential(*layers)
+
+    <span class="c-key">def</span> <span class="c-fn">forward</span>(self, y):
+        <span class="c-str">"""Returns the RESIDUAL, not the clean image."""</span>
+        <span class="c-key">return</span> self.body(y)          <span class="c-com"># v_hat</span>
+
+<span class="c-com"># clean image is recovered outside the network:</span>
+<span class="c-com">#   x_hat = y - model(y)</span>
+</code></pre>
+      <p><strong>The one line to notice:</strong> <code>forward</code> returns the residual. This is the whole paper in a single design choice, and it is the first thing to check when you open <em>any</em> denoising repository in Stage 2 — does the forward pass return the image or the noise?</p>
+    </div>
+  </details>
+</section>
+
+<!-- ================= 13 RESIDUAL ================= -->
+<section id="residual" class="reveal">
+  <h2><span class="num">13</span> Residual learning — the central idea</h2>
+  <p class="sub">If you understand only one thing from the paper, make it this.</p>
+
+  <h3>Once intuitively</h3>
+  <div class="imagine">
+    <p><b>Imagine that…</b> you are given a photograph with dust specks on it and asked to produce a clean copy. Two strategies exist.</p>
+    <p><strong>Strategy A (direct):</strong> redraw the entire photograph from scratch, dust-free. You must reproduce every face, every leaf, every gradient — 99% of which was already perfect.</p>
+    <p><strong>Strategy B (residual):</strong> draw a transparent overlay showing <em>only where the dust is</em>. Then subtract it. You never touch the 99% that was already correct.</p>
+    <p>Strategy B is obviously easier. That is residual learning.</p>
+  </div>
+
+  <h3>Once technically</h3>
+  <p>Discriminative models such as MLP and CSF learn a mapping <span class="mono">F(y) = x</span> that predicts the latent clean image. DnCNN instead trains a residual mapping <span class="mono">R(y) ≈ v</span>, giving <span class="mono">x = y − R(y)</span>. <span class="src paper">paper</span></p>
+
+  <div class="eq">
+    ℓ(Θ) = (1 / 2N) · Σ<sub>i=1..N</sub> ‖ ℛ(y<sub>i</sub>; Θ) − (y<sub>i</sub> − x<sub>i</sub>) ‖²<sub>F</sub>
+    <span class="where">Equation (1) in the paper — averaged mean squared error between the desired residual images and the estimated ones, over N noisy–clean training patch pairs {(yᵢ, xᵢ)}</span>
+  </div>
+
+  <p>Note carefully: the ground-truth target is <span class="mono">(yᵢ − xᵢ)</span>, i.e. <em>the actual noise</em>. The loss never looks at the clean image directly.</p>
+
+  <h3>The formal justification</h3>
+  <p>The paper's argument is precise and worth quoting in your defence almost word for word. It rests on a result from ResNet: <strong>when the original mapping is more like an identity mapping, the residual mapping will be much easier to optimize</strong>. <span class="src paper">paper</span></p>
+  <p>Then the observation that closes the argument: the noisy observation <span class="mono">y</span> is much more like the latent clean image <span class="mono">x</span> than it is like the residual image <span class="mono">v</span> — <em>especially when the noise level is low</em>. Therefore <span class="mono">F(y)</span> would be closer to an identity mapping than <span class="mono">R(y)</span> is, and so the residual formulation is more suitable for image denoising. <span class="src paper">paper</span></p>
+
+  <p>Your deck states the same logic compactly: at low noise, <span class="mono">y ≈ x</span>, so learning <span class="mono">F(y) ≈ identity</span> is hard, while learning <span class="mono">R(y) = v ≈ small perturbation</span> is easy. <span class="src deck">your deck</span></p>
+
+  <div class="note">
+    <p><strong>Why "learning the identity is hard" is not obvious — and how to answer if a TA presses you.</strong> A stack of convolutions with ReLUs has no built-in way to express "copy the input unchanged"; it would have to arrange 17 layers of weights to conspire into an identity transform, which is a narrow and awkward point in parameter space. Meanwhile a network that outputs <em>zero</em> is trivially reachable — just drive the weights toward zero. Residual learning positions the "do nothing" solution at the easy point instead of the hard one.</p>
+  </div>
+
+  <details>
+    <summary>Two distinctions people get wrong (worth pre-empting)</summary>
+    <div class="body">
+      <p><strong>1 · DnCNN is not ResNet.</strong> The paper says so explicitly: unlike the residual network, which uses many residual units (identity shortcuts), <strong>DnCNN employs a single residual unit to predict the residual image</strong>. <span class="src paper">paper</span> One global skip, not dozens of local ones.</p>
+      <p><strong>2 · Residual prediction was not brand new — but residual prediction for <em>denoising</em> was.</strong> The paper notes the strategy had already been adopted in low-level vision problems such as single image super-resolution and colour demosaicking, but states that to the best of the authors' knowledge <strong>there is no work which directly predicts the residual image for denoising</strong>. <span class="src paper">paper</span> Being precise about this distinction is exactly the kind of nuance a defence rewards.</p>
+    </div>
+  </details>
+</section>
+
+<!-- ================= 14 RL+BN ================= -->
+<section id="rlbn" class="reveal">
+  <h2><span class="num">14</span> The RL + BN synergy — why the pair beats either alone</h2>
+  <p class="sub">The paper's most cited empirical finding, and a favourite defence question.</p>
+
+  <p>The claim, stated as a two-way street: <strong>the integration of residual learning and batch normalization can result in fast and stable training and better denoising performance</strong>, and the two <strong>benefit from each other</strong>. <span class="src paper">paper</span></p>
+
+  <div class="dia">
+    <svg viewBox="0 0 640 250" role="img" aria-label="Mutual benefit between residual learning and batch normalization">
+      <defs>
+        <marker id="arA" markerWidth="10" markerHeight="10" refX="8" refY="3.5" orient="auto"><path d="M0,0 L8,3.5 L0,7 z" fill="#5eead4"/></marker>
+        <marker id="arB" markerWidth="10" markerHeight="10" refX="8" refY="3.5" orient="auto"><path d="M0,0 L8,3.5 L0,7 z" fill="#f472b6"/></marker>
+      </defs>
+      <g font-family="system-ui" font-size="12">
+        <circle cx="140" cy="125" r="72" fill="#131a2a" stroke="#5eead4" stroke-width="1.8"/>
+        <text x="140" y="115" text-anchor="middle" fill="#5eead4" font-weight="800" font-size="14">Residual</text>
+        <text x="140" y="136" text-anchor="middle" fill="#5eead4" font-weight="800" font-size="14">Learning</text>
+
+        <circle cx="500" cy="125" r="72" fill="#131a2a" stroke="#f472b6" stroke-width="1.8"/>
+        <text x="500" y="115" text-anchor="middle" fill="#f472b6" font-weight="800" font-size="14">Batch</text>
+        <text x="500" y="136" text-anchor="middle" fill="#f472b6" font-weight="800" font-size="14">Normalization</text>
+
+        <path d="M216 96 Q320 56 424 96" fill="none" stroke="#f472b6" stroke-width="1.8" marker-end="url(#arB)" transform="translate(0,0) scale(1,1)"/>
+        <path d="M424 158 Q320 198 216 158" fill="none" stroke="#5eead4" stroke-width="1.8" marker-end="url(#arA)"/>
+
+        <text x="320" y="48" text-anchor="middle" fill="#f472b6" font-size="11.5" font-weight="600">RL makes layer inputs Gaussian-like,</text>
+        <text x="320" y="64" text-anchor="middle" fill="#f472b6" font-size="11.5">less correlated → ideal conditions for BN</text>
+
+        <text x="320" y="204" text-anchor="middle" fill="#5eead4" font-size="11.5" font-weight="600">BN alleviates internal covariate shift,</text>
+        <text x="320" y="220" text-anchor="middle" fill="#5eead4" font-size="11.5">enabling stable training at higher learning rates</text>
+
+        <text x="320" y="128" text-anchor="middle" fill="#e6ebf5" font-size="13" font-weight="800">↔</text>
+      </g>
+    </svg>
+    <div class="cap">Fig. E — The two directions of the synergy, both stated in Section III-C of the paper. <span class="src paper">paper</span></div>
+  </div>
+
+  <h3>Direction 1 — residual learning benefits from BN</h3>
+  <p>Straightforward: BN alleviates the internal covariate shift problem. The paper's Fig. 2 shows that residual learning <em>without</em> BN converges fast but is inferior to residual learning <em>with</em> BN. <span class="src paper">paper</span> Your deck adds the concrete number: without BN, residual learning alone cannot match TNRD's 28.92 dB. <span class="src deck">your deck</span></p>
+
+  <h3>Direction 2 — BN benefits from residual learning (the surprising one)</h3>
+  <p>This is the non-obvious half. The paper states that <strong>without residual learning, batch normalization even has a certain adverse effect on convergence</strong>. <span class="src paper">paper</span></p>
+  <p>The mechanism it gives: each mini-batch is a small set (e.g. 128) of images. <em>Without</em> residual learning, the input intensity and convolutional features are correlated with their neighbours, and the distribution of layer inputs depends on the content of the images in that particular mini-batch. <em>With</em> residual learning, DnCNN implicitly removes the latent clean image in the hidden layers, which makes the inputs of each layer <strong>Gaussian-like distributed, less correlated, and less related to image content</strong>. So residual learning also helps BN reduce internal covariate shift. <span class="src paper">paper</span></p>
+
+  <div class="imagine">
+    <p><b>Imagine that…</b> BN is a thermostat that regulates a room by measuring the average temperature. If the room's contents change completely every few seconds — sometimes a furnace, sometimes an ice rink — the average is meaningless and the thermostat oscillates wildly. Residual learning strips out the "contents" (the image) and leaves only the noise, which has a stable, predictable, Gaussian distribution. Suddenly the thermostat's average is meaningful and it regulates beautifully.</p>
+  </div>
+
+  <h3>The conclusion the authors draw</h3>
+  <p>The paper is careful to attribute the win to the <em>combination</em>, not to the optimiser: both SGD and Adam enable the network with residual learning and batch normalization to have the best results — <strong>it is the integration of residual learning and batch normalization, rather than the optimization algorithm, that leads to the best denoising performance</strong>. <span class="src paper">paper</span></p>
+
+  <p>It also offers the deeper intuition for <em>why</em> denoising in particular: in Gaussian denoising, the residual image and batch normalization are <strong>both associated with the Gaussian distribution</strong>, so it is very likely they benefit from each other. <span class="src paper">paper</span></p>
+
+  <div class="good">
+    <p><strong>Likely defence question:</strong> "Would this synergy hold for a task where the residual is not Gaussian?" The honest, source-grounded answer: the paper's footnote explicitly guards against over-reading its own claim, noting this does not mean DnCNN cannot handle other general denoising tasks well — and DnCNN-3 goes on to prove it on super-resolution and JPEG deblocking, where the residual is clearly not AWGN. <span class="src paper">paper</span></p>
+  </div>
+</section>
+
+<!-- ================= 15 DEPTH ================= -->
+<section id="depth" class="reveal">
+  <h2><span class="num">15</span> Depth and receptive field — how 17 was chosen</h2>
+  <p class="sub">A rare case of a hyperparameter with a documented, principled derivation.</p>
+
+  <p>Because pooling is removed and filters are 3×3, the receptive field of a DnCNN of depth <span class="mono">d</span> is exactly: <span class="src paper">paper</span></p>
+
+  <div class="eq">RF = (2d + 1) × (2d + 1)<span class="where">each additional 3×3 convolution extends the field by one pixel on every side</span></div>
+
+  <div class="card">
+    <div class="ctrl">
+      <label for="dep">Network depth d</label>
+      <input type="range" id="dep" min="1" max="30" value="17" step="1">
+      <span class="val" id="depv">17</span>
+    </div>
+    <div class="grid3" style="margin-top:6px">
+      <div class="stat"><div class="v" id="rfv">35×35</div><div class="k">Receptive field</div></div>
+      <div class="stat"><div class="v" id="rfpx">1225</div><div class="k">Pixels of context</div></div>
+      <div class="stat"><div class="v" id="rfnote" style="font-size:1rem">DnCNN-S</div><div class="k">Matches</div></div>
+    </div>
+    <p style="font-size:.83rem;color:var(--txt-3);margin-top:12px;margin-bottom:0">Interactive calculator implementing the paper's formula. <span class="src aid">study aid</span></p>
+  </div>
+
+  <h3>The reasoning chain the authors used</h3>
+  <p>They anchor depth to the concept of <strong>effective patch size</strong> — the amount of surrounding image a method actually consults. The paper notes that the receptive field size of denoising neural networks correlates with the effective patch size of denoising methods, and that <strong>high noise level usually requires larger effective patch size</strong> to capture more context. <span class="src paper">paper</span></p>
+
+  <p>Fixing σ = 25, they tabulate what the leading methods effectively use: <span class="src paper">paper</span></p>
+
+  <div class="tw">
+    <table>
+      <thead><tr><th>Method</th><th>Effective patch size</th><th>How it arises</th></tr></thead>
+      <tbody>
+        <tr><td>EPLL</td><td class="mono best">36 × 36</td><td>Smallest of the group</td></tr>
+        <tr><td>MLP</td><td class="mono">47 × 47</td><td>39×39 patch then a 9×9 averaging filter</td></tr>
+        <tr><td>BM3D</td><td class="mono">49 × 49</td><td>Non-local search in a 25×25 window, performed twice</td></tr>
+        <tr><td>CSF</td><td class="mono">61 × 61</td><td>Ten conv layers with 7×7 filters (five stages)</td></tr>
+        <tr><td>TNRD</td><td class="mono">61 × 61</td><td>Same construction as CSF</td></tr>
+        <tr><td>WNNM</td><td class="mono">361 × 361</td><td>Large window, iterated non-local search</td></tr>
+        <tr class="best"><td><b>DnCNN-S</b></td><td class="mono"><b>35 × 35</b></td><td>Depth 17, chosen to sit near the smallest (EPLL)</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p style="font-size:.87rem;color:var(--txt-3)">Table 6 — Effective patch sizes at σ = 25, reproduced from Table I of the paper.</p>
+
+  <p>The design question they then pose is genuinely elegant: it is <em>interesting to verify whether DnCNN with a receptive field size similar to EPLL can compete against the leading denoising methods</em>. So for a known noise level they set RF to 35×35 with the corresponding depth of 17, and for other general denoising tasks they adopt a larger receptive field with depth 20. <span class="src paper">paper</span></p>
+
+  <div class="tw">
+    <table>
+      <thead><tr><th>Variant</th><th>Depth</th><th>Receptive field</th><th>Purpose</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">DnCNN-S</td><td>17</td><td class="mono">35 × 35</td><td>Known ("specific") noise level σ</td></tr>
+        <tr><td class="mono">DnCNN-B</td><td>20</td><td class="mono">41 × 41</td><td>Blind Gaussian denoising, σ unknown</td></tr>
+        <tr><td class="mono">DnCNN-3</td><td>20</td><td class="mono">41 × 41</td><td>Three tasks jointly</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p style="font-size:.87rem;color:var(--txt-3)">Table 7 — The three variants, with depths and receptive fields as listed in your deck. <span class="src deck">your deck</span></p>
+
+  <div class="good">
+    <p><strong>The point to make on this slide:</strong> DnCNN wins <em>despite</em> having a receptive field smaller than every competitor except EPLL — one tenth the linear extent of WNNM's. It is not seeing more; it is understanding better. That single observation frames the entire classical-vs-learned argument, and it also sets up your discussion of the Barbara failure case in §19.</p>
+  </div>
+</section>
+
+<!-- ================= 16 MULTITASK ================= -->
+<section id="multitask" class="reveal">
+  <h2><span class="num">16</span> One model, three tasks — DnCNN-3</h2>
+  <p class="sub">The conceptual leap that gives the paper its title.</p>
+
+  <p>The insight is a reinterpretation of the same equation. If <span class="mono">v</span> is the difference between a ground-truth high-resolution image and the bicubic upsampling of its low-resolution version, then the denoising degradation model becomes single image super-resolution. Analogously, if <span class="mono">v</span> is the difference between the original image and its JPEG-compressed version, the model becomes JPEG deblocking. <strong>SISR and JPEG deblocking are special cases of a "general" image denoising problem</strong> — even though their <span class="mono">v</span> is very different from AWGN. <span class="src paper">paper</span></p>
+
+  <div class="dia">
+    <svg viewBox="0 0 700 250" role="img" aria-label="One degradation model covering three tasks">
+      <g font-family="system-ui" font-size="11.5">
+        <rect x="250" y="14" width="200" height="46" rx="11" fill="#131a2a" stroke="#5eead4" stroke-width="1.8"/>
+        <text x="350" y="43" text-anchor="middle" fill="#5eead4" font-size="16" font-weight="800" font-family="ui-monospace,monospace">y = x + v</text>
+
+        <line x1="350" y1="62" x2="350" y2="86" stroke="#243049" stroke-width="1.5"/>
+        <line x1="120" y1="86" x2="580" y2="86" stroke="#243049" stroke-width="1.5"/>
+        <line x1="120" y1="86" x2="120" y2="108" stroke="#243049" stroke-width="1.5"/>
+        <line x1="350" y1="86" x2="350" y2="108" stroke="#243049" stroke-width="1.5"/>
+        <line x1="580" y1="86" x2="580" y2="108" stroke="#243049" stroke-width="1.5"/>
+
+        <rect x="26" y="110" width="188" height="96" rx="11" fill="#0f1522" stroke="#818cf8" stroke-width="1.4"/>
+        <text x="120" y="134" text-anchor="middle" fill="#818cf8" font-weight="700" font-size="12.5">Denoising</text>
+        <text x="120" y="156" text-anchor="middle" fill="#e6ebf5" font-family="ui-monospace,monospace">v = AWGN</text>
+        <text x="120" y="176" text-anchor="middle" fill="#a8b4cc">σ ∈ [0, 55]</text>
+        <text x="120" y="194" text-anchor="middle" fill="#7c89a6">random sensor noise</text>
+
+        <rect x="256" y="110" width="188" height="96" rx="11" fill="#0f1522" stroke="#5eead4" stroke-width="1.4"/>
+        <text x="350" y="134" text-anchor="middle" fill="#5eead4" font-weight="700" font-size="12.5">Super-Resolution</text>
+        <text x="350" y="156" text-anchor="middle" fill="#e6ebf5" font-family="ui-monospace,monospace">v = HR − bicubic(LR)</text>
+        <text x="350" y="176" text-anchor="middle" fill="#a8b4cc">×2, ×3, ×4</text>
+        <text x="350" y="194" text-anchor="middle" fill="#7c89a6">lost high frequencies</text>
+
+        <rect x="486" y="110" width="188" height="96" rx="11" fill="#0f1522" stroke="#f472b6" stroke-width="1.4"/>
+        <text x="580" y="134" text-anchor="middle" fill="#f472b6" font-weight="700" font-size="12.5">JPEG Deblocking</text>
+        <text x="580" y="156" text-anchor="middle" fill="#e6ebf5" font-family="ui-monospace,monospace">v = orig − compressed</text>
+        <text x="580" y="176" text-anchor="middle" fill="#a8b4cc">QF 5–99</text>
+        <text x="580" y="194" text-anchor="middle" fill="#7c89a6">compression artifacts</text>
+
+        <text x="350" y="234" text-anchor="middle" fill="#7c89a6" font-size="11.5">Same network. Same loss. Only the definition of "noise" changes.</text>
+      </g>
+    </svg>
+    <div class="cap">Fig. F — The unifying degradation model, with task definitions and ranges as given in your deck. <span class="src deck">your deck</span> <span class="src paper">paper</span></div>
+  </div>
+
+  <h3>The theoretical permission slip</h3>
+  <p>The paper does not simply assert that this works — it derives why it should. From the connection with one-stage TNRD, the residual estimate remains valid whenever the derivative of the data-fidelity term vanishes at zero, a condition that <strong>holds for many types of noise distributions, e.g. the generalized Gaussian distribution</strong>. The authors state it is natural to assume it also holds for the noise caused by SISR and JPEG compression. <span class="src paper">paper</span></p>
+
+  <p>Their expectation for the general case: even when the noise distribution is complex, DnCNN should perform robustly in predicting the residual image <strong>by gradually removing the latent clean image in the hidden layers</strong>. <span class="src paper">paper</span></p>
+
+  <div class="note">
+    <p><strong>The claim to make carefully.</strong> The paper states that to the best of the authors' knowledge <strong>none of the existing methods had been reported for handling these three tasks with only a single model</strong>. <span class="src paper">paper</span> Note the hedge — "to the best of our knowledge". Reproduce the hedge in your slides. Overstating priority is exactly the kind of thing a TA will catch.</p>
+  </div>
+
+  <p>Fig. 12 of the paper demonstrates it visually: a single input image composed of six regions — noisy at σ=15 and σ=25, bicubically interpolated low-resolution at ×2 and ×3, and JPEG at quality factors 10 and 30 — is restored by one model, and the result <strong>looks natural and does not have obvious artifacts</strong>. <span class="src paper">paper</span></p>
+</section>
+
+<!-- ================= 17 TRAINING ================= -->
+<section id="training" class="reveal">
+  <h2><span class="num">17</span> Data, pipeline and training configuration</h2>
+  <p class="sub">The details that make Stage 2's "how do their data pipelines work?" answerable.</p>
+
+  <h3>Training sets per variant</h3>
+  <div class="tw">
+    <table>
+      <thead><tr><th>Model</th><th>Source images</th><th>Patches</th><th>Patch size</th><th>Noise</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">DnCNN-S</td><td>400 images (180²)</td><td class="mono">128 × 1,600</td><td class="mono">40 × 40</td><td class="mono">σ ∈ {15, 25, 50}</td></tr>
+        <tr><td class="mono">DnCNN-B</td><td>400 images (180²)</td><td class="mono">128 × 3,000</td><td class="mono">50 × 50</td><td class="mono">σ ∈ [0, 55]</td></tr>
+        <tr><td class="mono">CDnCNN-B</td><td>432 BSD colour</td><td class="mono">128 × 3,000</td><td class="mono">50 × 50</td><td class="mono">σ ∈ [0, 55]</td></tr>
+        <tr><td class="mono">DnCNN-3</td><td>91 + 200 BSD</td><td class="mono">128 × 8,000</td><td class="mono">50 × 50</td><td>Mixed tasks</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p style="font-size:.87rem;color:var(--txt-3)">Table 8 — Training data configuration as tabulated in your deck. <span class="src deck">your deck</span></p>
+
+  <h3>Test sets</h3>
+  <ul>
+    <li><strong>BSD68</strong> — 68 natural images, the primary denoising benchmark. <span class="src deck">deck</span> <span class="src paper">paper</span></li>
+    <li><strong>The 12 classics</strong> — Cameraman, House, Peppers, Starfish, Monarch, Airplane, Parrot, Lena, Barbara, Boat, Man, Couple. <span class="src paper">paper</span></li>
+    <li><strong>Super-resolution</strong> — Set5, Set14, BSD100, Urban100. <span class="src paper">paper</span></li>
+    <li><strong>JPEG deblocking</strong> — Classic5 and LIVE1. <span class="src paper">paper</span></li>
+  </ul>
+
+  <h3>The pipeline, end to end</h3>
+  <div class="dia">
+    <svg viewBox="0 0 780 130" role="img" aria-label="DnCNN training pipeline">
+      <defs><marker id="ar4" markerWidth="8" markerHeight="8" refX="6" refY="2.6" orient="auto"><path d="M0,0 L6,2.6 L0,5.2 z" fill="#5eead4"/></marker></defs>
+      <g font-family="system-ui" font-size="10.5" text-anchor="middle">
+        <g fill="#131a2a" stroke="#243049">
+          <rect x="8" y="40" width="82" height="48" rx="9"/>
+          <rect x="106" y="40" width="82" height="48" rx="9"/>
+          <rect x="204" y="40" width="82" height="48" rx="9"/>
+          <rect x="302" y="40" width="82" height="48" rx="9"/>
+          <rect x="400" y="40" width="82" height="48" rx="9"/>
+          <rect x="498" y="40" width="82" height="48" rx="9"/>
+          <rect x="596" y="40" width="82" height="48" rx="9" stroke="#5eead4" stroke-width="1.6"/>
+          <rect x="694" y="40" width="80" height="48" rx="9" stroke="#fbbf24" stroke-width="1.4"/>
+        </g>
+        <g fill="#e6ebf5" font-weight="700" font-size="11">
+          <text x="49" y="60">Source</text><text x="147" y="60">Crop</text><text x="245" y="60">Augment</text>
+          <text x="343" y="60">+ Noise</text><text x="441" y="60">Pair</text><text x="539" y="60">Batch</text>
+          <text x="637" y="60" fill="#5eead4">DnCNN</text><text x="734" y="60" fill="#fbbf24">Loss</text>
+        </g>
+        <g fill="#7c89a6">
+          <text x="49" y="77">400 images</text><text x="147" y="77">40–50 px</text><text x="245" y="77">rot + flip</text>
+          <text x="343" y="77">AWGN σ</text><text x="441" y="77">{yᵢ, xᵢ}</text><text x="539" y="77">128 patches</text>
+          <text x="637" y="77" fill="#a8b4cc">R(y;Θ) → v̂</text><text x="734" y="77" fill="#a8b4cc">MSE(v̂, v)</text>
+        </g>
+        <g stroke="#5eead4" stroke-width="1.4" marker-end="url(#ar4)">
+          <line x1="92" y1="64" x2="102" y2="64"/><line x1="190" y1="64" x2="200" y2="64"/>
+          <line x1="288" y1="64" x2="298" y2="64"/><line x1="386" y1="64" x2="396" y2="64"/>
+          <line x1="484" y1="64" x2="494" y2="64"/><line x1="582" y1="64" x2="592" y2="64"/>
+          <line x1="680" y1="64" x2="690" y2="64"/>
+        </g>
+        <path d="M734 92 L734 112 L637 112 L637 92" fill="none" stroke="#fbbf24" stroke-width="1.3" stroke-dasharray="4 3" marker-end="url(#ar4)"/>
+        <text x="686" y="126" fill="#7c89a6" font-size="10">backprop</text>
+        <text x="390" y="22" fill="#e6ebf5" font-size="12" font-weight="700">Complete training pipeline</text>
+      </g>
+    </svg>
+    <div class="cap">Fig. G — The pipeline exactly as laid out on your deck's data slide. <span class="src deck">your deck</span></div>
+  </div>
+
+  <h3>Hyperparameters</h3>
+  <div class="grid3">
+    <div class="stat"><div class="v" style="font-size:1.15rem">MSE</div><div class="k">Loss</div><div class="d">On the residual: ‖R(y;Θ) − (y−x)‖²</div></div>
+    <div class="stat"><div class="v" style="font-size:1.15rem">SGD</div><div class="k">Optimizer</div><div class="d">Momentum 0.9 · weight decay 1e⁻⁴</div></div>
+    <div class="stat"><div class="v" style="font-size:1.15rem">1e⁻¹→1e⁻⁴</div><div class="k">Learning rate</div><div class="d">Exponential decay across 50 epochs</div></div>
+    <div class="stat"><div class="v" style="font-size:1.15rem">128</div><div class="k">Batch size</div><div class="d">Patch mini-batch SGD</div></div>
+    <div class="stat"><div class="v" style="font-size:1.15rem">He et al.</div><div class="k">Initialization</div><div class="d">Variance scaling designed for ReLU</div></div>
+    <div class="stat"><div class="v" style="font-size:1.15rem">MatConvNet</div><div class="k">Framework</div><div class="d">MATLAB-based CNN library</div></div>
+  </div>
+  <p style="font-size:.87rem;color:var(--txt-3);margin-top:14px">All six values as listed on your deck's training configuration slide. <span class="src deck">your deck</span></p>
+
+  <h3>Hardware and training time</h3>
+  <p>Trained on an Intel i7-5820K CPU @ 3.30 GHz with an Nvidia Titan X GPU. <span class="src paper">paper</span> <span class="src deck">deck</span> The paper reports approximately <strong>6 hours</strong> for DnCNN-S, <strong>one day</strong> for DnCNN-B / CDnCNN-B, and <strong>three days</strong> for DnCNN-3. <span class="src paper">paper</span></p>
+
+  <div class="note">
+    <p><strong>Excellent Stage 2 angle.</strong> DnCNN was written in MatConvNet — a MATLAB library. Essentially nothing in modern denoising is written in MATLAB. Tracing <em>that</em> migration (MATLAB → PyTorch, hand-rolled training loops → framework abstractions, papers shipping <code>.mat</code> weights → Hugging Face model cards) is a direct, concrete answer to the brief's request to explain how pre-trained weights are utilized today compared to older methods. <span class="src aid">study aid</span></p>
+  </div>
+</section>
+
+<!-- ================= 18 RESULTS ================= -->
+<section id="results" class="reveal">
+  <h2><span class="num">18</span> Results — the numbers you must know cold</h2>
+  <p class="sub">These are the tables a TA will point at and say "explain this".</p>
+
+  <h3>The headline benchmark: BSD68 average PSNR</h3>
+  <div class="tw">
+    <table>
+      <thead><tr><th>Method</th><th>σ = 15</th><th>σ = 25</th><th>σ = 50</th></tr></thead>
+      <tbody>
+        <tr><td>BM3D (Dabov '07)</td><td class="mono">31.07</td><td class="mono">28.57</td><td class="mono">25.62</td></tr>
+        <tr><td>WNNM (Gu '14)</td><td class="mono">31.37</td><td class="mono">28.83</td><td class="mono">25.87</td></tr>
+        <tr><td>EPLL (Zoran '11)</td><td class="mono">31.21</td><td class="mono">28.68</td><td class="mono">25.67</td></tr>
+        <tr><td>MLP (Burger '12)</td><td class="mono">—</td><td class="mono">28.96</td><td class="mono">26.03</td></tr>
+        <tr><td>CSF (Schmidt '14)</td><td class="mono">31.24</td><td class="mono">28.74</td><td class="mono">—</td></tr>
+        <tr><td>TNRD (Chen '16)</td><td class="mono">31.42</td><td class="mono">28.92</td><td class="mono">25.97</td></tr>
+        <tr class="best"><td><b>DnCNN-S</b></td><td class="mono"><b>31.73</b></td><td class="mono"><b>29.23</b></td><td class="mono"><b>26.23</b></td></tr>
+        <tr class="best"><td><b>DnCNN-B</b> (blind)</td><td class="mono"><b>31.61</b></td><td class="mono"><b>29.16</b></td><td class="mono"><b>26.23</b></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p style="font-size:.87rem;color:var(--txt-3)">Table 9 — Average PSNR (dB) on BSD68, reproduced from Table II of the paper. <span class="src paper">paper</span> <span class="src deck">deck</span></p>
+
+  <div class="card" data-bars>
+    <h4 style="margin-top:0">Visualised — σ = 25, BSD68</h4>
+    <div class="bar-row"><span class="nm">BM3D</span><span class="bar-track"><span class="bar-fill c1" data-w="28.57"></span></span><span class="vl">28.57</span></div>
+    <div class="bar-row"><span class="nm">EPLL</span><span class="bar-track"><span class="bar-fill c1" data-w="28.68"></span></span><span class="vl">28.68</span></div>
+    <div class="bar-row"><span class="nm">CSF</span><span class="bar-track"><span class="bar-fill c1" data-w="28.74"></span></span><span class="vl">28.74</span></div>
+    <div class="bar-row"><span class="nm">WNNM</span><span class="bar-track"><span class="bar-fill c1" data-w="28.83"></span></span><span class="vl">28.83</span></div>
+    <div class="bar-row"><span class="nm">TNRD</span><span class="bar-track"><span class="bar-fill c2" data-w="28.92"></span></span><span class="vl">28.92</span></div>
+    <div class="bar-row"><span class="nm">MLP</span><span class="bar-track"><span class="bar-fill c2" data-w="28.96"></span></span><span class="vl">28.96</span></div>
+    <div class="bar-row"><span class="nm">DnCNN-B (blind)</span><span class="bar-track"><span class="bar-fill c3" data-w="29.16"></span></span><span class="vl">29.16</span></div>
+    <div class="bar-row"><span class="nm">DnCNN-S</span><span class="bar-track"><span class="bar-fill c3" data-w="29.23"></span></span><span class="vl">29.23</span></div>
+    <p style="font-size:.8rem;color:var(--txt-3);margin:14px 0 0">Bars scaled between 28.4 and 29.4 dB to make the differences legible — the absolute range is genuinely this narrow, which is exactly why 0.6 dB is a large result. <span class="src aid">study aid</span></p>
+  </div>
+
+  <h3>How to interpret 0.6 dB without sounding naive</h3>
+  <p>The paper supplies its own calibration, and this is the argument to make: prior work found that <strong>few methods can outperform BM3D by more than 0.3 dB on average</strong>. MLP and TNRD achieved a notable gain of about 0.35 dB. DnCNN-S outperforms BM3D by <strong>0.6 dB on all three noise levels</strong>. And at σ = 50, both DnCNN-S and DnCNN-B exceed BM3D by about 0.6 dB — <strong>very close to the estimated PSNR bound over BM3D (0.7 dB)</strong> reported in the literature. <span class="src paper">paper</span></p>
+
+  <div class="good">
+    <p><strong>The strongest single sentence in your entire deck.</strong> DnCNN captured roughly 85% of the theoretically available improvement over BM3D — and DnCNN-B did it <em>without being told the noise level</em>, beating competitors that were trained for that specific noise level. <span class="src paper">paper</span></p>
+  </div>
+
+  <h3>Per-image results at σ = 25 — including where it loses</h3>
+  <div class="tw">
+    <table>
+      <thead><tr><th>Image</th><th>BM3D</th><th>WNNM</th><th>TNRD</th><th>DnCNN-S</th><th>Δ vs BM3D</th></tr></thead>
+      <tbody>
+        <tr><td>Cameraman</td><td class="mono">29.45</td><td class="mono">29.64</td><td class="mono">29.72</td><td class="mono best">30.18</td><td class="mono" style="color:var(--ok)">+0.73</td></tr>
+        <tr><td>House</td><td class="mono">32.85</td><td class="mono best">33.22</td><td class="mono">32.53</td><td class="mono">33.06</td><td class="mono" style="color:var(--ok)">+0.21</td></tr>
+        <tr><td>Barbara</td><td class="mono">30.71</td><td class="mono best">31.24</td><td class="mono">29.41</td><td class="mono">30.00</td><td class="mono" style="color:var(--bad)">−0.71</td></tr>
+        <tr><td>Parrot</td><td class="mono">28.93</td><td class="mono">29.15</td><td class="mono">29.18</td><td class="mono best">29.43</td><td class="mono" style="color:var(--ok)">+0.50</td></tr>
+        <tr class="hl"><td><b>Average (12)</b></td><td class="mono">29.97</td><td class="mono">30.26</td><td class="mono">30.06</td><td class="mono best">30.44</td><td class="mono" style="color:var(--ok)">+0.47</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p style="font-size:.87rem;color:var(--txt-3)">Table 10 — Per-image PSNR at σ = 25, as summarised on your deck from Table III of the paper. <span class="src deck">your deck</span> <span class="src paper">paper</span></p>
+
+  <p>The paper's own explanation of the Barbara and House results is the most intellectually valuable passage in the whole experimental section. DnCNN-S fails to achieve the best result on exactly the two images <strong>dominated by repetitive structures</strong>, and this is consistent with a known finding: <strong>non-local means based methods are usually better on images with regular and repetitive structures, whereas discriminative training based methods generally produce better results on images with irregular textures</strong>. <span class="src paper">paper</span></p>
+
+  <p>And the reason, which the paper spells out: images with regular, repetitive structures <em>meet well with the non-local similarity prior</em>; images with irregular textures weaken the advantage of that specific prior. <span class="src paper">paper</span></p>
+
+  <div class="imagine">
+    <p><b>Imagine that…</b> WNNM is a student who solves problems by finding a nearly identical worked example elsewhere in the textbook. On Barbara's striped scarf — where every stripe has fifty near-twins — that strategy is unbeatable. DnCNN is a student who learned the underlying principles and works from local context alone. On irregular content with no twins to find, the principled student wins; on highly repetitive content, the lookup student wins. <strong>Neither is simply "better".</strong> This is precisely the observation that motivated the non-local attention denoisers that came after DnCNN.</p>
+  </div>
+
+  <h3>Qualitative findings</h3>
+  <p>The paper's visual comparison summary: BM3D, WNNM, EPLL and MLP tend to produce over-smooth edges and textures; TNRD preserves sharp edges and fine details but is likely to generate artifacts in smooth regions; DnCNN-S and DnCNN-B recover sharp edges and fine details <em>and</em> yield visually pleasant results in smooth regions. <span class="src paper">paper</span></p>
+  <p>For colour, the paper reports that CBM3D generates false colour artifacts in some regions whereas CDnCNN-B recovers more natural colour, with more detail and sharper edges. <span class="src paper">paper</span></p>
+
+  <h3>Runtime — the commercial argument</h3>
+  <div class="tw">
+    <table>
+      <thead><tr><th>Method</th><th>256 × 256</th><th>512 × 512</th><th>1024 × 1024</th></tr></thead>
+      <tbody>
+        <tr><td>BM3D (CPU)</td><td class="mono">0.65 s</td><td class="mono">2.85 s</td><td class="mono">11.89 s</td></tr>
+        <tr><td>WNNM (CPU)</td><td class="mono">203.1 s</td><td class="mono">773.2 s</td><td class="mono">2536.4 s</td></tr>
+        <tr><td>EPLL (CPU)</td><td class="mono">25.4 s</td><td class="mono">45.5 s</td><td class="mono">422.1 s</td></tr>
+        <tr><td>TNRD (GPU)</td><td class="mono">0.010 s</td><td class="mono">0.032 s</td><td class="mono">0.116 s</td></tr>
+        <tr class="best"><td><b>DnCNN-S (GPU)</b></td><td class="mono">0.014 s</td><td class="mono">0.051 s</td><td class="mono">0.200 s</td></tr>
+        <tr class="best"><td><b>DnCNN-B (GPU)</b></td><td class="mono">0.016 s</td><td class="mono"><b>0.060 s</b></td><td class="mono">0.235 s</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p style="font-size:.87rem;color:var(--txt-3)">Table 11 — Run time in seconds at noise level 25, from Table IV of the paper. <span class="src paper">paper</span></p>
+
+  <div class="grid3">
+    <div class="stat"><div class="v" data-count="60" data-suffix=" ms">0</div><div class="k">512×512 on GPU</div><div class="d">Real-time capable <span class="src deck">deck</span></div></div>
+    <div class="stat"><div class="v" data-count="12000" data-suffix="×">0</div><div class="k">Faster than WNNM</div><div class="d">Same image, same noise level <span class="src deck">deck</span></div></div>
+    <div class="stat"><div class="v" data-count="556" data-suffix="K">0</div><div class="k">Parameters</div><div class="d">Very small by modern standards <span class="src deck">deck</span></div></div>
+  </div>
+
+  <div class="warn">
+    <p><strong>Be scrupulous about this comparison, because a sharp TA will be.</strong> The paper itself flags that since GPU run time varies greatly with the GPU and the accelerated library, it is hard to make a fair comparison between CSF, TNRD and DnCNN — the authors simply copied the CSF and TNRD GPU times from the original papers. <span class="src paper">paper</span> Also note BM3D's 2.85 s is a <em>CPU</em> number against DnCNN's <em>GPU</em> number. State the hardware asymmetry on the slide. Reproducing the caveat is what separates a rigorous presentation from a marketing one.</p>
+  </div>
+
+  <h3>DnCNN-3 across all three tasks</h3>
+  <p>The multi-task summary from Table V of the paper: even though a single DnCNN-3 model is trained for three different tasks, it still outperforms the non-blind TNRD and BM3D for Gaussian denoising; for SISR it surpasses TNRD by a large margin and is <strong>on par with VDSR</strong>; and for JPEG deblocking it outperforms AR-CNN by about 0.3 dB and has about 0.1 dB gain over TNRD on all quality factors. <span class="src paper">paper</span></p>
+
+  <div class="tw">
+    <table>
+      <thead><tr><th>Task</th><th>Setting</th><th>Specialist baseline</th><th>DnCNN-3</th></tr></thead>
+      <tbody>
+        <tr><td>Denoising (BSD68)</td><td>σ = 25</td><td class="mono">BM3D 28.57 · TNRD 28.92</td><td class="mono best">29.02</td></tr>
+        <tr><td>Super-resolution (Set5)</td><td>×3</td><td class="mono">TNRD 33.18 · VDSR 33.67</td><td class="mono best">33.75</td></tr>
+        <tr><td>Super-resolution (Set14)</td><td>×3</td><td class="mono">TNRD 29.43 · VDSR 29.77</td><td class="mono best">29.81</td></tr>
+        <tr><td>JPEG deblocking (Classic5)</td><td>QF 10</td><td class="mono">AR-CNN 29.03 · TNRD 29.28</td><td class="mono best">29.40</td></tr>
+        <tr><td>JPEG deblocking (LIVE1)</td><td>QF 20</td><td class="mono">AR-CNN 31.29 · TNRD 31.46</td><td class="mono best">31.59</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p style="font-size:.87rem;color:var(--txt-3)">Table 12 — Selected PSNR (dB) rows from Table V of the paper, chosen to show one model beating task-specific baselines on all three tasks. <span class="src paper">paper</span></p>
+</section>
+
+<!-- ================= 19 LIMITS ================= -->
+<section id="limits" class="reveal">
+  <h2><span class="num">19</span> Limitations and legacy — your bridge to the modern era</h2>
+  <p class="sub">This section is where Stage 3's "Future Directions" chapter is born.</p>
+
+  <div class="note">
+    <p><strong>Why criticism earns marks.</strong> The brief's final structural section asks: <em>what are the current unsolved problems in this specific domain?</em> <span class="src pdf">assignment</span> You cannot answer that without first articulating what DnCNN could not do. Each limitation below is a doorway to a modern paper you can cite.</p>
+  </div>
+
+  <p>Your deck already frames four limitations. <span class="src deck">your deck</span> Each is grounded in evidence from the paper itself:</p>
+
+  <div class="grid2">
+    <div class="card glow">
+      <h4>1 · Non-local patterns</h4>
+      <p>The local receptive field cannot exploit long-range self-similarity; WNNM and BM3D win on Barbara (−0.71 dB vs BM3D). <span class="src deck">deck</span></p>
+      <p><strong>Doorway to:</strong> non-local attention denoisers.</p>
+    </div>
+    <div class="card glow">
+      <h4>2 · The AWGN assumption</h4>
+      <p>Real-world noise is signal-dependent and spatially varying; AWGN is a simplification that limits practical applicability. <span class="src deck">deck</span></p>
+      <p><strong>Doorway to:</strong> real-noise models and blind real-image denoisers.</p>
+    </div>
+    <div class="card glow">
+      <h4>3 · No perceptual loss</h4>
+      <p>MSE optimises PSNR, not visual quality — and later work showed the two can diverge. <span class="src deck">deck</span></p>
+      <p><strong>Doorway to:</strong> perceptual and adversarial losses.</p>
+    </div>
+    <div class="card glow">
+      <h4>4 · Fixed architecture</h4>
+      <p>No attention, no multi-scale processing, no adaptation. <span class="src deck">deck</span></p>
+      <p><strong>Doorway to:</strong> transformer and U-Net based restoration.</p>
+    </div>
+  </div>
+
+  <h3>The six research directions your deck names</h3>
+  <p>Your existing "Research Directions &amp; Legacy" slide lists six themes with example model names. <span class="src deck">your deck</span> This is a strong skeleton for Stage 3's modern SOTA chapter — <strong>but the names are given without citations, so you must source each one yourself.</strong></p>
+
+  <div class="tw">
+    <table>
+      <thead><tr><th>Direction</th><th>The idea</th><th>Example names your deck lists</th></tr></thead>
+      <tbody>
+        <tr><td>Non-local attention</td><td>Self-attention blocks to capture long-range dependencies DnCNN misses</td><td class="mono">Non-local Neural Networks, NLRN</td></tr>
+        <tr><td>Perceptual &amp; GAN losses</td><td>VGG perceptual loss + adversarial training, favouring realism over PSNR</td><td class="mono">SRGAN, ESRGAN</td></tr>
+        <tr><td>Real-world noise</td><td>Signal-dependent, spatially varying, sensor-specific noise models</td><td class="mono">FFDNet, CBDNet, SCUNet</td></tr>
+        <tr><td>Lightweight models</td><td>NAS, depthwise convolutions, distillation for mobile / edge deployment</td><td class="mono">ECBSR, IMDN</td></tr>
+        <tr><td>Transformers &amp; U-Nets</td><td>Multi-scale + attention architectures built on DnCNN's foundations</td><td class="mono">SwinIR, Restormer, DRUNet</td></tr>
+        <tr><td>Self-supervised</td><td>Training a denoiser without ground-truth clean images</td><td class="mono">Noise2Noise, Noise2Void</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p style="font-size:.87rem;color:var(--txt-3)">Table 13 — Directions and example names exactly as listed on your deck. Venues and years are <em>not</em> given there and are not supplied here — you must verify each independently. <span class="src deck">your deck</span></p>
+
+  <div class="danger">
+    <p><strong>Stage 1 requirement colliding with this table.</strong> Several of these names are pre-2022. The brief requires recent SOTA publications from <strong>2022–present</strong> in Category A. <span class="src pdf">assignment</span> When you build your source list, deliberately hunt for 2022+ denoising or image-restoration papers at CVPR / ICCV / ECCV / NeurIPS / TPAMI. Do not assume the six names above satisfy the recency requirement — check each publication year yourself.</p>
+  </div>
+
+  <h3>Optimization strategies your deck already discusses</h3>
+  <p>Useful material for the engineering chapter of Stage 3: <span class="src deck">your deck</span></p>
+  <ul>
+    <li><strong>Pruning</strong> — remove redundant filters, 30–50% parameter reduction</li>
+    <li><strong>Quantization</strong> — INT8 / FP16, 2–4× memory reduction</li>
+    <li><strong>Knowledge distillation</strong> — train a shallower student from a DnCNN teacher</li>
+    <li><strong>Depthwise separable convolutions</strong> — replace standard convs, ~8–9× FLOP reduction</li>
+  </ul>
+  <p>Your deck labels these <em>potential</em> optimization strategies, and the figures are estimates rather than measured results from the DnCNN paper. Present them with that framing intact.</p>
+
+  <h3>The legacy claim</h3>
+  <p>Your deck's conclusion states DnCNN is cited 6,000+ times and established residual learning + BN as the standard denoising paradigm. <span class="src deck">your deck</span> Citation counts change continuously — <strong>re-check the current number on Google Scholar or IEEE Xplore before the defence and cite the date you checked.</strong> A stale number is a small error that looks careless.</p>
+</section>
+
+<!-- ================= 20 DECK GAP ================= -->
+<section id="deckgap" class="reveal">
+  <h2><span class="num">20</span> Your existing deck vs. the assignment rubric</h2>
+  <p class="sub">An honest audit of what you have and what is still missing.</p>
+
+  <p>Your English presentation is organised into four parts covering the DnCNN paper thoroughly: Introduction &amp; Motivation, Architecture &amp; Design, Data / Training / Results, and Analysis &amp; Conclusion. <span class="src deck">your deck</span> It is a strong single-paper presentation. The question is how much of the <em>final project</em> it satisfies.</p>
+
+  <div class="tw">
+    <table>
+      <thead><tr><th>Brief's required deck section</th><th>Covered by your current deck?</th><th>What is missing</th></tr></thead>
+      <tbody>
+        <tr><td>1 · Introduction &amp; Problem Definition</td><td style="color:var(--ok)">Largely yes</td><td>Broaden from "the DnCNN problem" to "the denoising problem across 30 years"</td></tr>
+        <tr><td>2 · Classical DIP Foundation</td><td style="color:var(--warn)">Partially</td><td>You have a comparison slide naming BM3D / WNNM / CSF / TNRD, but not their <em>mathematics</em> or the class material you presented earlier in the semester</td></tr>
+        <tr><td>3 · Deep Learning Transition</td><td style="color:var(--ok)">Yes — this is your strength</td><td>Add MLP and the CSF/TNRD unrolling story explicitly as the bridge</td></tr>
+        <tr><td>4 · Modern State-of-the-Art</td><td style="color:var(--bad)">Not yet</td><td>Named only as future directions. Needs full treatment: architectures, attention mechanisms, training paradigms, with 2022+ citations</td></tr>
+        <tr><td>5 · Practical Deep-Dive</td><td style="color:var(--bad)">Not yet</td><td>No repository analysis, no code snippets, no screenshots, no framework or data-pipeline walkthrough</td></tr>
+        <tr><td>6 · Comparative Analysis</td><td style="color:var(--warn)">PSNR yes, SSIM partly</td><td>Extend the comparison forward to modern SOTA, not just DnCNN vs classical</td></tr>
+        <tr><td>7 · Future Directions &amp; Conclusion</td><td style="color:var(--ok)">Yes, as an outline</td><td>Convert the six directions into cited, explained content</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p style="font-size:.87rem;color:var(--txt-3)">Table 14 — Gap analysis of your deck against the brief's recommended structure. Column 1 <span class="src pdf">assignment</span>; columns 2–3 are an assessment written for this guide <span class="src aid">study aid</span>.</p>
+
+  <h3>The reference list problem</h3>
+  <p>Your deck lists ten references: DnCNN, BM3D, ResNet, Batch Normalization, TNRD, WNNM, VDSR, VGG, Levin &amp; Nadler, and CSF. <span class="src deck">your deck</span> Assessed against Stage 1's rules:</p>
+
+  <div class="grid2">
+    <div class="good"><p><strong>What already works.</strong> All ten are peer-reviewed papers from exactly the venues the brief names — IEEE TIP, TPAMI, CVPR, ICML, ICLR. That is 100% Category A, comfortably clearing the 70% floor.</p></div>
+    <div class="danger"><p><strong>What does not.</strong> The newest is from 2016–2017. The brief requires a mix including <strong>recent SOTA publications (2022–present)</strong>. <span class="src pdf">assignment</span> As it stands, the list satisfies the "older milestone papers" half of the requirement and none of the recent half.</p></div>
+  </div>
+
+  <div class="note">
+    <p><strong>Concrete fix.</strong> Keep all ten. Add at least four to six 2022+ papers on modern image restoration, plus two or three Category B items (a CS231n lecture, a textbook chapter on image restoration, an industry research blog post). That lands you at roughly 16–19 sources with a comfortable A/B ratio, and turns your reference slide from a liability into evidence of exactly the evolutionary sweep the brief is grading. <span class="src aid">study aid</span></p>
+  </div>
+</section>
+
+<!-- ================= 21 WORKFLOW ================= -->
+<section id="workflow" class="reveal">
+  <h2><span class="num">21</span> Step-by-step plan from today to submission</h2>
+  <p class="sub">A suggested schedule built around the three fixed deadlines. <span class="src aid">study aid</span></p>
+
+  <div class="warn">
+    <p>The three deadlines are from the brief. <span class="src pdf">assignment</span> Everything else in this section is a planning suggestion, not a requirement. Adapt it to your group's situation.</p>
+  </div>
+
+  <div class="tl">
+    <div class="tl-item pulse">
+      <div class="date">NOW → 11 AUG · STAGE 1 SPRINT</div>
+      <h4>Build the source list and the timeline</h4>
+      <ol>
+        <li><strong>Confirm your topic in writing with the TA.</strong> One sentence: "our topic is image denoising, anchored on DnCNN." Get it acknowledged before you invest a week.</li>
+        <li><strong>Freeze the classical half.</strong> Table 2 in §7 gives you a verified backbone from your existing sources. Read the abstracts and write your one-sentence "existed because / superseded because" chain for each.</li>
+        <li><strong>Hunt the modern half.</strong> Search CVPR / ICCV / ECCV / NeurIPS / TPAMI proceedings from 2022 onward for image restoration and denoising. Target 4–6 papers. Record venue, year, and authors exactly.</li>
+        <li><strong>Add Category B.</strong> Two or three items maximum, from the source types the brief names.</li>
+        <li><strong>Build the visual timeline.</strong> One slide, horizontal, eras marked, each source placed on it. This is the single artifact the TAs will look at hardest on 11 Aug.</li>
+        <li><strong>Assemble the short pitch deck.</strong> Topic → source table with A/B labels → timeline → your claimed evolutionary narrative in three sentences.</li>
+      </ol>
+    </div>
+
+    <div class="tl-item">
+      <div class="date">12 AUG → 21 AUG · STAGE 2 SPRINT</div>
+      <h4>Read real code and document it</h4>
+      <ol>
+        <li><strong>Pick 2–3 repositories:</strong> one historical (the DnCNN repository referenced in the paper), one or two modern implementations of your chosen SOTA methods.</li>
+        <li><strong>Run the §8 interrogation checklist</strong> on each. Answer all sixteen questions in writing. This is the raw material for the presentation.</li>
+        <li><strong>Actually run something.</strong> Even loading pre-trained weights and denoising one image gives you a screenshot, a runtime number, and — most importantly — the ability to answer "did you run it?" with yes.</li>
+        <li><strong>Capture artifacts:</strong> code snippets (with file path and line numbers), directory-tree screenshots, model-card screenshots, output images.</li>
+        <li><strong>Write the contrast:</strong> the MATLAB/MatConvNet → PyTorch/Hugging Face migration story from §17.</li>
+        <li><strong>Record provenance for everything:</strong> repository URL, commit hash or release tag, and the date you inspected it.</li>
+      </ol>
+    </div>
+
+    <div class="tl-item">
+      <div class="date">22 AUG → 31 AUG · STAGE 3 SPRINT</div>
+      <h4>Assemble and rehearse the master deck</h4>
+      <ol>
+        <li><strong>Build the skeleton first.</strong> Create empty slides for all seven sections from Table 4, with titles only. Get the story arc right before writing content.</li>
+        <li><strong>Port your existing 33 DnCNN slides</strong> into sections 3 and 6. Do not expand them.</li>
+        <li><strong>Write sections 2 and 4</strong> — classical foundation and modern SOTA. This is the bulk of the new work.</li>
+        <li><strong>Write section 5</strong> from your Stage 2 artifacts.</li>
+        <li><strong>Add connective tissue.</strong> Between every major section, insert a transition slide that says explicitly: "here is what was broken, here is what came next." This is what turns 10 summaries into one story — the exact thing the brief demands.</li>
+        <li><strong>Build the executive summary</strong> — the condensed version you will actually present.</li>
+        <li><strong>Rehearse defensively.</strong> Each group member picks 10 random slides from another member's section and must explain them. Fix whatever fails.</li>
+        <li><strong>Export to PDF and verify</strong> that every figure, table and screenshot survived the export.</li>
+      </ol>
+    </div>
+  </div>
+
+  <h3>Questions to ask your TA (because the transcript was unavailable)</h3>
+  <div class="card">
+    <ul style="margin-bottom:0">
+      <li>Are the three presentation dates group slots or a common session?</li>
+      <li>Is there an expected slide count or page range for the final deck?</li>
+      <li>How are the four grading criteria weighted?</li>
+      <li>Is the deck graded per group or per individual, and how are the defences scored?</li>
+      <li>Does re-using our existing DnCNN slides in the master deck count fully, or must the master deck be new material?</li>
+      <li>Do source counts include Category B in the 10+ minimum, or is 10+ the Category A floor?</li>
+      <li>What citation style is expected on the reference slides?</li>
+      <li>For the code deep-dive, is running the code required, or is reading and explaining it sufficient?</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ================= 22 FAQ ================= -->
+<section id="faq" class="reveal">
+  <h2><span class="num">22</span> Frequently asked questions</h2>
+  <p class="sub">Answered from the sources where possible; flagged clearly where not.</p>
+
+  <details>
+    <summary>Do we have to implement or train a model ourselves?</summary>
+    <div class="body">
+      <p>The brief states you are <strong>not required to code a new architecture from scratch</strong>, but you <strong>are required to perform a "code deep-dive."</strong> <span class="src pdf">assignment</span></p>
+      <p>It does not explicitly say whether running existing code is required. <span class="src aid">study aid</span> Practically, running a pre-trained model on one image costs little and produces screenshots, a runtime figure, and confidence under questioning. Ask your TA to be sure.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Can we just present DnCNN really well?</summary>
+    <div class="body">
+      <p>No. The brief names the evolutionary path as <strong>a core requirement</strong>, and states the deck <strong>cannot read like 10 disconnected paper summaries</strong> and must tell the complete evolutionary story. <span class="src pdf">assignment</span> A single-paper deck fails criterion 1 (tracing the evolutionary path) and criterion 3 (depth and cohesion) regardless of quality.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>What counts as a "top-tier" venue?</summary>
+    <div class="body">
+      <p>The brief names IEEE TPAMI, CVPR, ICCV, ECCV, NeurIPS and MICCAI as examples. <span class="src pdf">assignment</span> The word "e.g." means the list is illustrative, not exhaustive — IEEE TIP, for instance, is where DnCNN itself was published and is clearly of that calibre. If a venue is borderline, ask rather than assume.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Is arXiv acceptable as a source?</summary>
+    <div class="body">
+      <p>The brief does not address arXiv. <span class="src aid">study aid</span> The safe practice: cite the <em>published</em> venue whenever one exists, and give the arXiv identifier as a convenience link. DnCNN, for example, should be cited as IEEE TIP 2017 with arXiv:1608.03981 noted alongside. For very recent work with no published venue yet, ask your TA whether a preprint counts toward Category A.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>How many slides is enough?</summary>
+    <div class="body">
+      <p>The brief specifies depth in hours (2–4 hours of content) and never gives a slide count. <span class="src pdf">assignment</span> The estimate in §9 (roughly 60–120 slides at ~2 minutes each) is arithmetic, not a rule. Confirm with your TA.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Why does DnCNN predict noise instead of the clean image? Explain it in one sentence.</summary>
+    <div class="body">
+      <p>Because the noisy image already looks almost exactly like the clean image, so a network predicting the clean image would have to learn something close to an identity mapping — which is hard — whereas predicting the small residual is easy. <span class="src paper">paper</span></p>
+      <p>The formal version: when the original mapping is more like an identity mapping, the residual mapping is much easier to optimize; <span class="mono">y</span> is much more like <span class="mono">x</span> than like <span class="mono">v</span>, especially at low noise. <span class="src paper">paper</span></p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Why does DnCNN lose on Barbara?</summary>
+    <div class="body">
+      <p>Barbara is dominated by repetitive structure (the striped scarf and trousers). Non-local methods exploit exactly that repetition; DnCNN's local receptive field cannot. The paper documents this and links it to the known finding that non-local methods win on regular, repetitive structures while discriminative methods win on irregular textures. <span class="src paper">paper</span> DnCNN-S is 0.71 dB behind BM3D on Barbara at σ = 25. <span class="src deck">deck</span></p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Is a 0.6 dB PSNR gain actually a big deal?</summary>
+    <div class="body">
+      <p>Yes, in context. The paper cites prior findings that few methods outperform BM3D by more than 0.3 dB on average, and that the estimated achievable bound over BM3D is around 0.7 dB. <span class="src paper">paper</span> A 0.6 dB gain therefore captures most of the theoretically available headroom. Always present the number <em>with</em> that calibration — "0.6 dB" alone means nothing to a listener.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>What is the difference between DnCNN-S, DnCNN-B, CDnCNN-B and DnCNN-3?</summary>
+    <div class="body">
+      <ul>
+        <li><strong>DnCNN-S</strong> — "specific": depth 17, one model per known noise level.</li>
+        <li><strong>DnCNN-B</strong> — "blind": depth 20, one model for σ ∈ [0, 55], no noise estimation needed.</li>
+        <li><strong>CDnCNN-B</strong> — the colour version of DnCNN-B, trained on 432 colour BSD images.</li>
+        <li><strong>DnCNN-3</strong> — depth 20, one model for blind denoising + super-resolution + JPEG deblocking.</li>
+      </ul>
+      <p><span class="src paper">paper</span> <span class="src deck">deck</span></p>
+    </div>
+  </details>
+
+  <details>
+    <summary>The transcript mentioned in our instructions — where is it?</summary>
+    <div class="body">
+      <p>It was not provided with these materials. <strong>No TA clarifications appear anywhere in this guide</strong>, because inventing them would be worse than leaving the gap visible. Everywhere a clarification would normally sit, §21 lists a question for you to ask directly. If you obtain the transcript later, re-read §6, §7 and §9 against it — those are the sections most likely to be affected by a TA's verbal amendments.</p>
+    </div>
+  </details>
+</section>
+
+<!-- ================= 23 CHECKLIST ================= -->
+<section id="checklist" class="reveal">
+  <h2><span class="num">23</span> Submission checklist</h2>
+  <p class="sub">Click to tick. Your ticks are not saved — print the page if you want a hard copy.</p>
+
+  <h3>Before TA Presentation 1 — 11 Aug 2026</h3>
+  <ul class="chk">
+    <li><span class="box"></span><span class="t">Topic selected and confirmed with the TA</span></li>
+    <li><span class="box"></span><span class="t">At least 10 distinct sources curated, read and analysed</span></li>
+    <li><span class="box"></span><span class="t">Category A is ≥ 70% and every entry is from a peer-reviewed top-tier venue</span></li>
+    <li><span class="box"></span><span class="t">Category B is ≤ 30% and every entry is a textbook, recognised lecture, or industry-leader technical blog</span></li>
+    <li><span class="box"></span><span class="t">The list includes a genuine mix of older milestone papers AND 2022-or-later SOTA publications</span></li>
+    <li><span class="box"></span><span class="t">Visual timeline slide built (Classical Math → CNN → Transformer style)</span></li>
+    <li><span class="box"></span><span class="t">The evolutionary narrative is stated explicitly, not merely implied by the ordering</span></li>
+    <li><span class="box"></span><span class="t">Short pitch deck assembled and rehearsed</span></li>
+  </ul>
+
+  <h3>Before TA Presentation 2 — 21 Aug 2026</h3>
+  <ul class="chk">
+    <li><span class="box"></span><span class="t">The modern industry/academic standard for denoising is identified and justified</span></li>
+    <li><span class="box"></span><span class="t">2–3 open-source repositories located on GitHub / Hugging Face / PapersWithCode</span></li>
+    <li><span class="box"></span><span class="t">Model structure explained (classes, blocks, forward pass, what it returns)</span></li>
+    <li><span class="box"></span><span class="t">Framework identified (PyTorch / TensorFlow) with version</span></li>
+    <li><span class="box"></span><span class="t">Data pipeline traced end to end (dataset class, patching, augmentation, batching)</span></li>
+    <li><span class="box"></span><span class="t">Modern loss functions identified and explained</span></li>
+    <li><span class="box"></span><span class="t">Pre-trained weight usage documented, and contrasted with older manual feature extraction</span></li>
+    <li><span class="box"></span><span class="t">Deployment realities addressed (inference cost, hardware, latency)</span></li>
+    <li><span class="box"></span><span class="t">Every repository URL recorded with commit/tag and inspection date</span></li>
+  </ul>
+
+  <h3>Before TA Presentation 3 — 31 Aug 2026</h3>
+  <ul class="chk">
+    <li><span class="box"></span><span class="t">All seven recommended sections present in the master deck</span></li>
+    <li><span class="box"></span><span class="t">Depth judged equivalent to a 2–4 hour advanced lecture</span></li>
+    <li><span class="box"></span><span class="t">Transition slides connect every era to the next — the deck reads as one story</span></li>
+    <li><span class="box"></span><span class="t">Quantitative comparison included (PSNR and SSIM), with hardware asymmetries stated</span></li>
+    <li><span class="box"></span><span class="t">Visual/qualitative comparison included</span></li>
+    <li><span class="box"></span><span class="t">Code screenshots, snippets and architecture diagrams embedded</span></li>
+    <li><span class="box"></span><span class="t">Unsolved problems and future directions covered with citations</span></li>
+    <li><span class="box"></span><span class="t">Condensed executive summary prepared for the live presentation</span></li>
+    <li><span class="box"></span><span class="t">Every group member can explain every section — no orphaned slides</span></li>
+    <li><span class="box"></span><span class="t">Exported to PDF; all figures, tables and screenshots verified after export</span></li>
+    <li><span class="box"></span><span class="t">Citation counts and any "current SOTA" claims re-verified and dated</span></li>
+  </ul>
+</section>
+
+<!-- ================= 24 TAKEAWAYS ================= -->
+<section id="takeaways" class="reveal">
+  <h2><span class="num">24</span> Key takeaways</h2>
+  <p class="sub">If you remember nothing else.</p>
+
+  <div class="grid2">
+    <div class="card glow"><h4>① The project grades a story, not a bibliography</h4><p>The evolutionary path from classical DIP to SOTA is named as a core requirement, and disconnected paper summaries are explicitly ruled out. <span class="src pdf">assignment</span></p></div>
+    <div class="card glow"><h4>② DnCNN is the middle of your story, not the whole of it</h4><p>You need substantial content both before it (BM3D, WNNM, CSF, TNRD) and after it (2022+ attention and transformer methods).</p></div>
+    <div class="card glow"><h4>③ Residual learning is the single idea to master</h4><p>Predict the noise, not the image, because <span class="mono">y</span> already looks like <span class="mono">x</span> and learning an identity mapping is hard. <span class="src paper">paper</span></p></div>
+    <div class="card glow"><h4>④ RL and BN are mutually reinforcing</h4><p>BN fixes covariate shift for RL; RL makes layer inputs Gaussian-like and less content-dependent, which is exactly what BN needs. <span class="src paper">paper</span></p></div>
+    <div class="card glow"><h4>⑤ Context the numbers</h4><p>0.6 dB over BM3D matters only because few methods beat BM3D by 0.3 dB and the estimated bound is around 0.7 dB. <span class="src paper">paper</span></p></div>
+    <div class="card glow"><h4>⑥ Report the failures</h4><p>Barbara and House lose to non-local methods, and the paper explains why. That honesty is what motivates every attention-based denoiser that followed. <span class="src paper">paper</span></p></div>
+    <div class="card glow"><h4>⑦ Stage 2 is where marks are usually lost</h4><p>Reading unfamiliar code is genuinely hard. Start it the day after Stage 1 ends, not the week it is due.</p></div>
+    <div class="card glow"><h4>⑧ You can be questioned on any slide</h4><p>Never put content on a slide that nobody in the group can defend. <span class="src pdf">assignment</span></p></div>
+  </div>
+</section>
+
+<!-- ================= 25 REFS ================= -->
+<section id="refs" class="reveal">
+  <h2><span class="num">25</span> Sources, links and provenance</h2>
+  <p class="sub">Everything this guide was built from, and the one external link that is verified.</p>
+
+  <h3>Documents used to build this guide</h3>
+  <ol>
+    <li><strong>Digital Image Processing — Final Project: "From Foundations to State-of-the-Art: A Comprehensive Synthesis"</strong>, Prof. Zohreh Azimifar, July 2026. Submission format: phased presentations to TAs plus a final comprehensive slide deck (PDF). <span class="src pdf">assignment</span></li>
+    <li><strong>K. Zhang, W. Zuo, Y. Chen, D. Meng, L. Zhang</strong>, "Beyond a Gaussian Denoiser: Residual Learning of Deep CNN for Image Denoising", IEEE Transactions on Image Processing, 2017. arXiv:1608.03981. <span class="src paper">paper</span></li>
+    <li><strong>Your group's English DnCNN presentation</strong>, 33 slides, four parts. <span class="src deck">your deck</span></li>
+  </ol>
+
+  <h3>Verified external link</h3>
+  <p>The DnCNN paper states its testing code is available at <a href="https://github.com/cszn/DnCNN" target="_blank" rel="noopener">github.com/cszn/DnCNN</a>. <span class="src paper">paper</span> This is the only repository URL that appears in any of the provided documents.</p>
+
+  <h3>Reference list from your deck</h3>
+  <div class="tw">
+    <table>
+      <thead><tr><th>#</th><th>Work</th><th>Venue &amp; year</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>K. Zhang et al., "Beyond a Gaussian Denoiser…"</td><td>IEEE TIP, 2017</td></tr>
+        <tr><td>2</td><td>K. Dabov et al., BM3D</td><td>IEEE TIP, 2007</td></tr>
+        <tr><td>3</td><td>K. He et al., "Deep Residual Learning for Image Recognition" (ResNet)</td><td>CVPR, 2016</td></tr>
+        <tr><td>4</td><td>S. Ioffe &amp; C. Szegedy, "Batch Normalization…"</td><td>ICML, 2015</td></tr>
+        <tr><td>5</td><td>Y. Chen &amp; T. Pock, "Trainable Nonlinear Reaction Diffusion" (TNRD)</td><td>IEEE TPAMI, 2016</td></tr>
+        <tr><td>6</td><td>S. Gu et al., "Weighted Nuclear Norm Minimization" (WNNM)</td><td>CVPR, 2014</td></tr>
+        <tr><td>7</td><td>J. Kim et al., "Accurate Image Super-Resolution Using Very Deep CNNs" (VDSR)</td><td>CVPR, 2016</td></tr>
+        <tr><td>8</td><td>K. Simonyan &amp; A. Zisserman, "Very Deep Convolutional Networks" (VGG)</td><td>ICLR, 2015</td></tr>
+        <tr><td>9</td><td>A. Levin &amp; B. Nadler, "Natural Image Denoising: Optimality and Inherent Bounds"</td><td>CVPR, 2011</td></tr>
+        <tr><td>10</td><td>U. Schmidt &amp; S. Roth, "Shrinkage Fields for Effective Image Restoration" (CSF)</td><td>CVPR, 2014</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p style="font-size:.87rem;color:var(--txt-3)">Table 15 — Your deck's reference slide, reproduced as listed. <span class="src deck">your deck</span></p>
+
+  <h3>What this guide deliberately does not contain</h3>
+  <div class="danger">
+    <ul style="margin-bottom:0">
+      <li><strong>No TA clarifications</strong> — the transcript files were not provided.</li>
+      <li><strong>No repository URLs beyond the one in the paper</strong> — no others appear in the sources.</li>
+      <li><strong>No citations for modern SOTA models</strong> — your deck names them without venues or years, and guessing publication details would be fabrication. Verify each yourself.</li>
+      <li><strong>No grading weights</strong> — the brief lists four criteria without percentages.</li>
+      <li><strong>No slide-count requirement</strong> — the brief specifies hours of depth, not slides.</li>
+      <li><strong>No claimed Hugging Face model pages</strong> — none are named in the sources.</li>
+    </ul>
+  </div>
+</section>
+
+</main>
+</div>
+
+<button id="top" aria-label="Back to top">↑</button>
+
+<footer>
+  Study guide compiled from the assignment brief, the DnCNN paper, and your group's presentation.<br>
+  Where the sources are silent, this guide says so rather than filling the gap.
+</footer>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------- progress bar ---------- */
+  var bar = document.getElementById('progress');
+  function updProgress(){
+    var h = document.documentElement;
+    var max = h.scrollHeight - h.clientHeight;
+    bar.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + '%';
+  }
+  window.addEventListener('scroll', updProgress, {passive:true});
+  window.addEventListener('resize', updProgress);
+  updProgress();
+
+  /* ---------- back to top ---------- */
+  var topBtn = document.getElementById('top');
+  window.addEventListener('scroll', function(){
+    topBtn.classList.toggle('show', window.scrollY > 500);
+  }, {passive:true});
+  topBtn.addEventListener('click', function(){
+    window.scrollTo({top:0, behavior:'smooth'});
+  });
+
+  /* ---------- theme ---------- */
+  var themeBtn = document.getElementById('themeBtn');
+  themeBtn.addEventListener('click', function(){
+    var root = document.documentElement;
+    var next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    themeBtn.textContent = next === 'dark' ? '☀︎ Light' : '☾ Dark';
+    draw();
+  });
+
+  /* ---------- mobile menu ---------- */
+  var sidebar = document.getElementById('sidebar');
+  var menuBtn = document.getElementById('menuBtn');
+  menuBtn.addEventListener('click', function(){ sidebar.classList.toggle('open'); });
+  sidebar.addEventListener('click', function(e){
+    if(e.target.tagName === 'A' && window.innerWidth <= 960) sidebar.classList.remove('open');
+  });
+
+  /* ---------- expand / collapse all ---------- */
+  var expBtn = document.getElementById('expandAll');
+  var expanded = false;
+  expBtn.addEventListener('click', function(){
+    expanded = !expanded;
+    var ds = document.querySelectorAll('details');
+    for(var i=0;i<ds.length;i++) ds[i].open = expanded;
+    expBtn.textContent = expanded ? 'Collapse all' : 'Expand all';
+  });
+
+  /* ---------- reveal on scroll ---------- */
+  var revealables = document.querySelectorAll('.reveal');
+  if('IntersectionObserver' in window){
+    var ro = new IntersectionObserver(function(entries){
+      entries.forEach(function(en){
+        if(en.isIntersecting){ en.target.classList.add('in'); ro.unobserve(en.target); }
+      });
+    }, {threshold:0.06, rootMargin:'0px 0px -40px 0px'});
+    revealables.forEach(function(el){ ro.observe(el); });
+  } else {
+    revealables.forEach(function(el){ el.classList.add('in'); });
+  }
+
+  /* ---------- scrollspy ---------- */
+  var links = Array.prototype.slice.call(document.querySelectorAll('.sidebar a'));
+  var sections = links.map(function(a){ return document.querySelector(a.getAttribute('href')); }).filter(Boolean);
+  function spy(){
+    var y = window.scrollY + 120, cur = null;
+    for(var i=0;i<sections.length;i++){
+      if(sections[i].offsetTop <= y) cur = sections[i];
+    }
+    links.forEach(function(a){
+      a.classList.toggle('active', !!cur && a.getAttribute('href') === '#' + cur.id);
+    });
+  }
+  window.addEventListener('scroll', spy, {passive:true});
+  spy();
+
+  /* ---------- animated bars ---------- */
+  var barCards = document.querySelectorAll('[data-bars]');
+  function fillBars(card){
+    var fills = card.querySelectorAll('.bar-fill');
+    var lo = 28.4, hi = 29.4;
+    for(var i=0;i<fills.length;i++){
+      (function(f, idx){
+        var v = parseFloat(f.getAttribute('data-w'));
+        var pct = Math.max(4, Math.min(100, ((v - lo)/(hi - lo))*100));
+        setTimeout(function(){ f.style.width = pct + '%'; }, idx*90);
+      })(fills[i], i);
+    }
+  }
+  if('IntersectionObserver' in window){
+    var bo = new IntersectionObserver(function(es){
+      es.forEach(function(e){ if(e.isIntersecting){ fillBars(e.target); bo.unobserve(e.target); } });
+    }, {threshold:0.25});
+    barCards.forEach(function(c){ bo.observe(c); });
+  } else {
+    barCards.forEach(fillBars);
+  }
+
+  /* ---------- count-up ---------- */
+  function countUp(el){
+    var target = parseFloat(el.getAttribute('data-count'));
+    var suffix = el.getAttribute('data-suffix') || '';
+    var dur = 1200, t0 = null;
+    function step(ts){
+      if(!t0) t0 = ts;
+      var p = Math.min(1, (ts - t0)/dur);
+      var eased = 1 - Math.pow(1 - p, 3);
+      var val = target * eased;
+      el.textContent = (target >= 1000 ? Math.round(val).toLocaleString() : (target % 1 ? val.toFixed(1) : Math.round(val))) + suffix;
+      if(p < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+  var counters = document.querySelectorAll('[data-count]');
+  if('IntersectionObserver' in window){
+    var co = new IntersectionObserver(function(es){
+      es.forEach(function(e){ if(e.isIntersecting){ countUp(e.target); co.unobserve(e.target); } });
+    }, {threshold:0.4});
+    counters.forEach(function(c){ co.observe(c); });
+  } else {
+    counters.forEach(countUp);
+  }
+
+  /* ---------- deadline countdown ---------- */
+  var deadlines = [
+    {name:'TA Presentation 1', date:'2026-08-11'},
+    {name:'TA Presentation 2', date:'2026-08-21'},
+    {name:'Final Defense',     date:'2026-08-31'}
+  ];
+  var cdEl = document.getElementById('countdown');
+  var today = new Date();
+  today.setHours(0,0,0,0);
+  var html = '';
+  for(var i=0;i<deadlines.length;i++){
+    var d = new Date(deadlines[i].date + 'T00:00:00');
+    var days = Math.round((d - today) / 86400000);
+    var label = days > 1 ? days + ' days' : (days === 1 ? '1 day' : (days === 0 ? 'today' : 'passed'));
+    html += '<div class="cd-card"><div class="n">' + label + '</div><div class="l">' + deadlines[i].name + '</div>' +
+            '<div class="l" style="color:var(--txt-2);letter-spacing:0;text-transform:none;margin-top:4px">' + deadlines[i].date + '</div></div>';
+  }
+  cdEl.innerHTML = html;
+
+  /* ---------- checklist ---------- */
+  var chkItems = document.querySelectorAll('.chk li');
+  for(var i=0;i<chkItems.length;i++){
+    chkItems[i].setAttribute('tabindex','0');
+    chkItems[i].setAttribute('role','checkbox');
+    chkItems[i].setAttribute('aria-checked','false');
+    chkItems[i].addEventListener('click', function(){
+      this.classList.toggle('done');
+      this.setAttribute('aria-checked', this.classList.contains('done') ? 'true' : 'false');
+    });
+    chkItems[i].addEventListener('keydown', function(e){
+      if(e.key === ' ' || e.key === 'Enter'){ e.preventDefault(); this.click(); }
+    });
+  }
+
+  /* ---------- receptive field calculator ---------- */
+  var dep = document.getElementById('dep');
+  function updRF(){
+    var d = parseInt(dep.value, 10);
+    var rf = 2*d + 1;
+    document.getElementById('depv').textContent = d;
+    document.getElementById('rfv').textContent = rf + '×' + rf;
+    document.getElementById('rfpx').textContent = (rf*rf).toLocaleString();
+    var note = '—';
+    if(d === 17) note = 'DnCNN-S';
+    else if(d === 20) note = 'DnCNN-B / -3';
+    else if(d < 17) note = 'shallower';
+    else note = 'deeper';
+    document.getElementById('rfnote').textContent = note;
+  }
+  dep.addEventListener('input', updRF);
+  updRF();
+
+  /* ---------- denoising playground ---------- */
+  var N = 128;
+  var clean = new Float32Array(N*N);
+
+  // build a synthetic "image": gradient background, a disc, a bar, and a texture patch
+  (function buildClean(){
+    for(var y=0;y<N;y++){
+      for(var x=0;x<N;x++){
+        var v = 60 + 70*(x/N);                       // smooth gradient
+        var dx = x-44, dy = y-46;
+        if(dx*dx + dy*dy < 26*26) v = 215;            // bright disc
+        if(x>78 && x<112 && y>18 && y<104) v = 30;    // dark bar
+        if(y>92 && y<120 && x>12 && x<70){            // fine stripes (texture)
+          v = (x % 6 < 3) ? 200 : 70;
+        }
+        clean[y*N+x] = v;
+      }
+    }
+  })();
+
+  var noisy = new Float32Array(N*N);
+  var den   = new Float32Array(N*N);
+
+  function gauss(){ // Box-Muller
+    var u = 0, v = 0;
+    while(u === 0) u = Math.random();
+    while(v === 0) v = Math.random();
+    return Math.sqrt(-2*Math.log(u)) * Math.cos(2*Math.PI*v);
+  }
+
+  function addNoise(sigma){
+    for(var i=0;i<N*N;i++) noisy[i] = clean[i] + sigma*gauss();
+  }
+
+  function blur(src, dst, r){
+    if(r === 0){ dst.set(src); return; }
+    // separable box blur repeated twice ≈ Gaussian
+    var tmp = new Float32Array(N*N);
+    function pass(a, b){
+      var x,y,k,s,c,xx,yy;
+      for(y=0;y<N;y++){ for(x=0;x<N;x++){
+        s=0;c=0;
+        for(k=-r;k<=r;k++){ xx=x+k; if(xx>=0&&xx<N){ s+=a[y*N+xx]; c++; } }
+        b[y*N+x]=s/c;
+      }}
+      for(x=0;x<N;x++){ for(y=0;y<N;y++){
+        s=0;c=0;
+        for(k=-r;k<=r;k++){ yy=y+k; if(yy>=0&&yy<N){ s+=b[yy*N+x]; c++; } }
+        a[y*N+x]=s/c;
+      }}
+    }
+    dst.set(src);
+    pass(dst, tmp);
+    pass(dst, tmp);
+  }
+
+  function psnr(a, b){
+    var mse = 0;
+    for(var i=0;i<N*N;i++){ var d = a[i]-b[i]; mse += d*d; }
+    mse /= (N*N);
+    if(mse < 1e-9) return Infinity;
+    return 10*Math.log10(255*255/mse);
+  }
+
+  function paint(canvasId, arr, amplify, center){
+    var cv = document.getElementById(canvasId);
+    var ctx = cv.getContext('2d');
+    var img = ctx.createImageData(N,N);
+    for(var i=0;i<N*N;i++){
+      var v = arr[i];
+      if(amplify) v = center + (v)*amplify;
+      v = v < 0 ? 0 : (v > 255 ? 255 : v);
+      img.data[i*4]   = v;
+      img.data[i*4+1] = v;
+      img.data[i*4+2] = v;
+      img.data[i*4+3] = 255;
+    }
+    ctx.putImageData(img,0,0);
+  }
+
+  var sigEl = document.getElementById('sig');
+  var radEl = document.getElementById('rad');
+
+  function draw(){
+    var sigma = parseFloat(sigEl.value);
+    var r = parseInt(radEl.value, 10);
+    document.getElementById('sigv').textContent = sigma;
+    document.getElementById('radv').textContent = r === 0 ? 'off' : r;
+
+    addNoise(sigma);
+    blur(noisy, den, r);
+
+    var res = new Float32Array(N*N);
+    for(var i=0;i<N*N;i++) res[i] = noisy[i] - den[i];
+
+    paint('cClean', clean, 0, 0);
+    paint('cNoisy', noisy, 0, 0);
+    paint('cDen',   den,   0, 0);
+    paint('cRes',   res,   3, 128);
+
+    var pn = psnr(noisy, clean);
+    var pd = psnr(den, clean);
+    document.getElementById('pNoisy').textContent = 'PSNR ' + (isFinite(pn) ? pn.toFixed(2) : '∞') + ' dB';
+    var better = pd > pn;
+    document.getElementById('pDen').innerHTML = 'PSNR <span style="color:' + (better ? 'var(--ok)' : 'var(--bad)') + '">' +
+      (isFinite(pd) ? pd.toFixed(2) : '∞') + ' dB</span>';
+  }
+
+  sigEl.addEventListener('input', draw);
+  radEl.addEventListener('input', draw);
+  draw();
+
+})();
+</script>
+</body>
+</html>
