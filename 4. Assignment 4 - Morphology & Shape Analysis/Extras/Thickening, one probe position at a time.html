@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Thickening by thinning the complement — step by step</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#e8ebee;
+  --panel:#f7f8fa;
+  --ink:#0f1b2a;
+  --ink-soft:#4a5a6b;
+  --rule:#b9c2cb;
+  --rule-soft:#d5dbe1;
+  --fill:#a7b0b9;          /* a cell that belongs to the set on screen */
+  --fill-edge:#8b959f;
+  --probe:#0a6ea8;         /* the scanning window */
+  --signal:#d10f6b;        /* hit-or-miss match / deletion */
+  --gain:#0f6b52;          /* material added to A by thickening */
+  --cell:34px;
+  --pitch:35px;            /* --cell + 1px gap */
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family:"IBM Plex Sans",system-ui,sans-serif;
+  font-size:15px;
+  line-height:1.55;
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3{font-family:"Zilla Slab",Georgia,serif;font-weight:600;letter-spacing:-.01em;margin:0}
+.mono{font-family:"IBM Plex Mono",ui-monospace,monospace}
+
+.wrap{max-width:1180px;margin:0 auto;padding:28px 22px 80px}
+
+/* ---------- masthead ---------- */
+.masthead{border-bottom:2px solid var(--ink);padding-bottom:14px;margin-bottom:22px}
+.eyebrow{
+  font-family:"IBM Plex Mono",monospace;font-size:11.5px;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--ink-soft);margin-bottom:6px;
+}
+.masthead h1{font-size:38px;line-height:1.05}
+.masthead h1 em{font-style:normal;color:var(--probe)}
+.deck{max-width:62ch;margin-top:10px;color:var(--ink-soft)}
+
+/* ---------- formula rail ---------- */
+.rail{
+  display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--rule);
+  border:1px solid var(--rule);margin:0 0 24px;
+}
+.rail>div{background:var(--panel);padding:14px 16px}
+.rail .lbl{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--ink-soft);margin-bottom:8px}
+.eq{font-family:"Zilla Slab",Georgia,serif;font-size:22px;line-height:1.7}
+.eq i{font-style:italic}
+.eq sup{font-size:.6em}
+.recipe{margin:0;padding:0;list-style:none;font-family:"IBM Plex Mono",monospace;font-size:14px}
+.recipe li{padding:3px 0 3px 26px;position:relative}
+.recipe li::before{
+  content:attr(data-n);position:absolute;left:0;top:3px;color:var(--probe);
+  font-size:11px;letter-spacing:.1em
+}
+
+/* ---------- stage ---------- */
+.stage{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:22px;align-items:start}
+
+.plate{background:var(--panel);border:1px solid var(--rule);padding:18px}
+.plate-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:14px}
+.plate-head h2{font-size:19px}
+.badge{
+  font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.12em;text-transform:uppercase;
+  border:1px solid var(--ink);padding:2px 7px;white-space:nowrap
+}
+.badge.on{background:var(--ink);color:var(--panel)}
+
+.lattice-scroll{overflow-x:auto;padding:20px 20px 8px}
+.lattice-holder{position:relative;width:max-content;margin:0 auto}
+.lattice{
+  position:relative;display:grid;gap:1px;background:var(--rule-soft);
+  border:1px solid var(--rule);padding:1px;
+}
+.cell{
+  width:var(--cell);height:var(--cell);background:#fff;position:relative;
+  transition:background-color .35s ease;
+}
+.cell.set{background:var(--fill)}
+.cell.gain{background:var(--gain);opacity:.85}
+.cell.marked{background:var(--signal)}
+.cell.ghost::after{
+  content:"";position:absolute;inset:6px;border:1.5px dashed rgba(15,27,42,.42);
+}
+.cell.set.ghost::after{border-color:rgba(255,255,255,.75)}
+.cell.rowlit{box-shadow:inset 0 0 0 2px var(--probe)}
+.cell.edit{cursor:pointer}
+.cell.edit:hover{outline:2px solid var(--probe);outline-offset:-2px}
+
+.probe{
+  position:absolute;left:0;top:0;width:calc(3*var(--pitch) - 1px);height:calc(3*var(--pitch) - 1px);
+  border:2px solid var(--probe);pointer-events:none;
+  transition:transform .38s cubic-bezier(.4,.05,.2,1),opacity .2s;
+  box-shadow:0 0 0 1px rgba(255,255,255,.6) inset;
+}
+.probe.hidden{opacity:0}
+.probe.hit{border-color:var(--signal)}
+.probe .dot{
+  position:absolute;left:50%;top:50%;width:7px;height:7px;margin:-3.5px 0 0 -3.5px;
+  background:var(--probe);border-radius:50%
+}
+.probe.hit .dot{background:var(--signal)}
+
+.rulers{font-family:"IBM Plex Mono",monospace;font-size:10px;color:var(--ink-soft)}
+.ruler-top{display:grid;gap:1px;padding:0 1px 3px;width:max-content;margin:0 auto;border:1px solid transparent}
+.ruler-top span{width:var(--cell);text-align:center}
+
+/* ---------- legend ---------- */
+.legend{display:flex;flex-wrap:wrap;gap:8px 20px;margin-top:16px;
+  font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--ink-soft)}
+.legend b{display:inline-block;width:13px;height:13px;margin-right:6px;vertical-align:-2px;border:1px solid var(--rule)}
+.sw-empty{background:#fff}.sw-set{background:var(--fill)}.sw-mark{background:var(--signal);border-color:var(--signal)}
+.sw-gain{background:var(--gain);border-color:var(--gain)}
+.sw-probe{background:#fff;border:2px solid var(--probe)}
+
+/* ---------- side panel ---------- */
+.side{display:flex;flex-direction:column;gap:14px}
+.card{background:var(--panel);border:1px solid var(--rule);padding:16px}
+.card h3{font-size:12px;font-family:"IBM Plex Mono",monospace;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--ink-soft);font-weight:500;margin-bottom:12px}
+
+.se-row{display:flex;gap:18px;align-items:flex-start}
+.se-block{text-align:center}
+.se-name{font-family:"Zilla Slab",serif;font-size:17px;margin-bottom:7px}
+.mini{display:grid;grid-template-columns:repeat(3,34px);gap:1px;background:var(--rule);
+  border:1px solid var(--rule);width:max-content}
+.mini div{
+  width:34px;height:34px;background:#fff;display:grid;place-items:center;
+  font-family:"IBM Plex Mono",monospace;font-size:14px;font-weight:500;
+  transition:background-color .3s ease,color .3s ease
+}
+.mini .t1{background:var(--fill)}
+.mini .t0{background:#fff}
+.mini .tx{color:var(--ink-soft);background:repeating-linear-gradient(45deg,#fff,#fff 4px,#eef1f4 4px,#eef1f4 8px)}
+.mini .pass{box-shadow:inset 0 0 0 2px var(--gain)}
+.mini .fail{box-shadow:inset 0 0 0 2px var(--signal);color:var(--signal)}
+.mini .ctr{outline:2px solid var(--probe);outline-offset:-2px}
+
+.narration{min-height:132px}
+.narration .where{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--probe);
+  letter-spacing:.06em;margin-bottom:6px}
+.narration .title{font-family:"Zilla Slab",serif;font-size:18px;margin-bottom:6px}
+.narration p{margin:0;font-size:14.2px;color:var(--ink)}
+.narration .verdict{margin-top:9px;font-family:"IBM Plex Mono",monospace;font-size:12.5px;
+  padding:5px 8px;display:inline-block}
+.v-hit{background:var(--signal);color:#fff}
+.v-no{background:#e5e9ed;color:var(--ink-soft)}
+.v-info{background:var(--ink);color:var(--panel)}
+
+.tally{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--rule);border:1px solid var(--rule)}
+.tally div{background:var(--panel);padding:9px 10px}
+.tally .n{font-family:"Zilla Slab",serif;font-size:22px;line-height:1}
+.tally .k{font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--ink-soft);margin-top:3px}
+
+/* ---------- transport ---------- */
+.transport{background:var(--panel);border:1px solid var(--rule);margin-top:22px;padding:14px 16px}
+.tbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+button{
+  font-family:"IBM Plex Mono",monospace;font-size:12px;letter-spacing:.06em;
+  background:var(--panel);color:var(--ink);border:1px solid var(--ink);
+  padding:7px 12px;cursor:pointer;transition:background .15s,color .15s
+}
+button:hover:not(:disabled){background:var(--ink);color:var(--panel)}
+button:disabled{opacity:.35;cursor:not-allowed}
+button.primary{background:var(--ink);color:var(--panel);min-width:104px}
+button.primary:hover{background:var(--probe);border-color:var(--probe)}
+button:focus-visible{outline:2px solid var(--probe);outline-offset:2px}
+
+.scrub{display:flex;align-items:center;gap:12px;margin-top:14px}
+input[type=range]{flex:1;accent-color:var(--probe)}
+.counter{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--ink-soft);white-space:nowrap}
+
+.opts{display:flex;flex-wrap:wrap;gap:16px 24px;margin-top:14px;padding-top:14px;
+  border-top:1px solid var(--rule-soft);font-family:"IBM Plex Mono",monospace;font-size:12px}
+.opts label{display:flex;align-items:center;gap:7px;cursor:pointer;color:var(--ink-soft)}
+.opts input[type=checkbox]{accent-color:var(--probe);width:15px;height:15px}
+.speed{display:flex;align-items:center;gap:9px;min-width:250px;flex:1}
+.speed input[type=range]{max-width:190px}
+
+/* ---------- plate strip ---------- */
+.strip{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:var(--rule);
+  border:1px solid var(--rule);margin-top:22px}
+.strip figure{background:var(--panel);margin:0;padding:13px;opacity:.32;transition:opacity .4s}
+.strip figure.live{opacity:1}
+.strip figcaption{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--ink-soft);margin-bottom:8px}
+.strip figcaption b{color:var(--ink);font-weight:600}
+.thumb{display:grid;gap:1px;background:var(--rule-soft);border:1px solid var(--rule-soft);width:max-content}
+.thumb i{width:8px;height:8px;background:#fff;display:block}
+.thumb i.on{background:var(--fill)}
+
+/* ---------- notes ---------- */
+.notes{margin-top:34px;border-top:2px solid var(--ink);padding-top:18px;
+  display:grid;grid-template-columns:1fr 1fr;gap:26px}
+.notes h3{font-size:17px;margin-bottom:8px}
+.notes p{margin:0 0 10px;font-size:14px;color:var(--ink-soft)}
+.notes code{font-family:"IBM Plex Mono",monospace;font-size:13px;background:#dfe4e9;padding:1px 4px}
+.caveat{border-left:3px solid var(--signal);padding-left:14px}
+
+@media (max-width:960px){
+  .stage{grid-template-columns:1fr}
+  .rail{grid-template-columns:1fr}
+  .notes{grid-template-columns:1fr}
+  .strip{grid-template-columns:repeat(2,1fr)}
+  :root{--cell:26px;--pitch:27px}
+  .masthead h1{font-size:29px}
+}
+@media (prefers-reduced-motion:reduce){
+  *{transition:none!important}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="eyebrow">Digital Image Processing · Morphology · Gonzalez &amp; Woods, Fig. 9.22</div>
+    <h1>Thickening, one probe position at a time</h1>
+    <p class="deck">Thickening is never computed directly in practice. The set is turned inside out, the
+      <em>background</em> is thinned by one cycle of the eight structuring elements, and the result is turned
+      back. Below, that cycle runs at whatever pace you choose — down to a single 3×3 comparison per step.</p>
+  </header>
+
+  <section class="rail">
+    <div>
+      <div class="lbl">Definition</div>
+      <div class="eq">
+        <i>A</i> ⊙ <i>B</i> = <i>A</i> ∪ (<i>A</i> ⊛ <i>B</i>)<br>
+        <i>A</i> ⊙ {<i>B</i>} = ((…((<i>A</i> ⊙ <i>B</i><sup>1</sup>) ⊙ <i>B</i><sup>2</sup>)…) ⊙ <i>B</i><sup>n</sup>)
+      </div>
+    </div>
+    <div>
+      <div class="lbl">The procedure actually used</div>
+      <ol class="recipe">
+        <li data-n="01">Form <i>C</i> = <i>A</i><sup>c</sup></li>
+        <li data-n="02">Thin <i>C</i> with the same eight structuring elements</li>
+        <li data-n="03">Take <i>C</i><sup>c</sup> — that is the thickened set</li>
+        <li data-n="04">Drop any points left disconnected from the body</li>
+      </ol>
+    </div>
+  </section>
+
+  <div class="stage">
+    <!-- LEFT: the lattice -->
+    <section class="plate">
+      <div class="plate-head">
+        <h2 id="plateTitle">Set A</h2>
+        <span class="badge" id="viewBadge">viewing A</span>
+      </div>
+      <div class="lattice-scroll">
+        <div class="rulers"><div class="ruler-top" id="rulerTop"></div></div>
+        <div class="lattice-holder">
+          <div class="lattice" id="lattice"></div>
+          <div class="probe hidden" id="probe"><span class="dot"></span></div>
+        </div>
+      </div>
+      <div class="legend">
+        <span><b class="sw-empty"></b>outside the set</span>
+        <span><b class="sw-set"></b>in the set on screen</span>
+        <span><b class="sw-mark"></b>matched — to be deleted</span>
+        <span><b class="sw-gain"></b>gained by thickening</span>
+        <span><b class="sw-probe"></b>probe window</span>
+        <span><b class="sw-empty" style="border-style:dashed"></b>original A outline</span>
+      </div>
+    </section>
+
+    <!-- RIGHT: probe readout -->
+    <aside class="side">
+      <div class="card">
+        <h3>Probe</h3>
+        <div class="se-row">
+          <div class="se-block">
+            <div class="se-name" id="seName">—</div>
+            <div class="mini" id="seGrid"></div>
+            <div class="mono" style="font-size:10.5px;color:var(--ink-soft);margin-top:7px">template</div>
+          </div>
+          <div class="se-block">
+            <div class="se-name">under it</div>
+            <div class="mini" id="nbGrid"></div>
+            <div class="mono" style="font-size:10.5px;color:var(--ink-soft);margin-top:7px">neighbourhood</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card narration">
+        <h3>What is happening</h3>
+        <div class="where mono" id="nWhere"></div>
+        <div class="title" id="nTitle"></div>
+        <p id="nText"></p>
+        <div class="verdict mono" id="nVerdict"></div>
+      </div>
+
+      <div class="tally">
+        <div><div class="n" id="tPass">–</div><div class="k">pass</div></div>
+        <div><div class="n" id="tMarked">0</div><div class="k">marked now</div></div>
+        <div><div class="n" id="tDeleted">0</div><div class="k">deleted total</div></div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- transport -->
+  <section class="transport">
+    <div class="tbar">
+      <button id="btnRestart" title="Back to the first step">⏮ Restart</button>
+      <button id="btnPrevPhase">◀◀ Stage</button>
+      <button id="btnPrev">◀ Back</button>
+      <button id="btnPlay" class="primary">▶ Play</button>
+      <button id="btnNext">Step ▶</button>
+      <button id="btnNextPhase">Stage ▶▶</button>
+      <button id="btnNextHit">Next match ⏩</button>
+    </div>
+
+    <div class="scrub">
+      <span class="counter" id="counter">step 1 / 1</span>
+      <input type="range" id="scrubber" min="0" max="0" value="0" aria-label="Scrub through the steps">
+    </div>
+
+    <div class="opts">
+      <div class="speed">
+        <label for="speed" style="cursor:default">interval</label>
+        <input type="range" id="speed" min="150" max="3500" step="50" value="1400">
+        <span class="counter" id="speedOut">1400 ms</span>
+      </div>
+      <label><input type="checkbox" id="optPauseHit" checked> pause on every match</label>
+      <label><input type="checkbox" id="optSkipEmpty"> visit only cells inside C</label>
+      <label><input type="checkbox" id="optEdit"> edit set A by clicking</label>
+    </div>
+  </section>
+
+  <!-- plate strip -->
+  <section class="strip" id="strip"></section>
+
+  <section class="notes">
+    <div>
+      <h3>Why thinning the background thickens the set</h3>
+      <p>Each of the eight structuring elements deletes points that sit on one particular side of the
+        set being thinned. Applied to <code>C = Aᶜ</code>, the cells they can delete are exactly the cells of
+        <code>C</code> that touch <code>A</code>: <i>B</i><sup>1</sup> strips the row of background directly
+        beneath <i>A</i>, <i>B</i><sup>3</sup> the column to its left, <i>B</i><sup>5</sup> the row above,
+        <i>B</i><sup>7</sup> the column to its right, and the four remaining elements handle the corners.
+        Remove one layer of background all the way round, complement, and <i>A</i> has grown by one layer —
+        including into concave notches, which is the whole point of the figure.</p>
+      <p>The elements are applied <em>in sequence</em>: matches for <i>B</i><sup>k</sup> are found on the
+        result left by <i>B</i><sup>k−1</sup> and deleted together before <i>B</i><sup>k+1</sup> begins. That
+        ordering is why the growth is not perfectly symmetric.</p>
+    </div>
+    <div class="caveat">
+      <h3>Conventions used here, so nothing is hidden</h3>
+      <p><b>The lattice.</b> The set <i>A</i> is a hand-entered lattice in the spirit of Fig. 9.22(a), not a
+        pixel-exact transcription of the printed plate. Click cells with <span class="mono">edit set A</span>
+        on and the whole run is recomputed from scratch.</p>
+      <p><b>Outside the window.</b> Everything beyond the drawn lattice counts as background, i.e. as part of
+        <i>C</i>. Without that, the border of the window would be mistaken for a border of the background and
+        eaten away.</p>
+      <p><b>One cycle.</b> One trip through <i>B</i><sup>1</sup>…<i>B</i><sup>8</sup> equals one layer of
+        thickening. The final stage removes any component of the thickened set not 8-connected to the original
+        <i>A</i>; the counter reports what was actually found, which may well be none.</p>
+    </div>
+  </section>
+
+</div>
+
+<script>
+"use strict";
+
+/* ══════════════════════════════════════════════════════════════
+   1 · The lattice
+   ══════════════════════════════════════════════════════════════ */
+const ROWS = 7, COLS = 13;
+const IDX = (r, c) => r * COLS + c;
+
+/* Set A — a notched bar, in the spirit of Fig. 9.22(a) */
+const DEFAULT_A = [
+  [2,3],[2,4],[2,5],      [2,7],[2,8],
+  [3,3],[3,4],[3,5],[3,6],[3,7],[3,8],[3,9],
+  [4,3],[4,4],[4,5],[4,6],[4,7],[4,8],[4,9]
+];
+
+let A = new Uint8Array(ROWS * COLS);
+function loadDefaultA(){
+  A = new Uint8Array(ROWS * COLS);
+  DEFAULT_A.forEach(([r, c]) => A[IDX(r, c)] = 1);
+}
+loadDefaultA();
+
+/* ══════════════════════════════════════════════════════════════
+   2 · The eight structuring elements (Golay alphabet, Fig. 9.21)
+        1 = must be in the set   0 = must be outside   x = ignore
+   ══════════════════════════════════════════════════════════════ */
+const SES = [
+  { name:"B¹", m:[[0,0,0],["x",1,"x"],[1,1,1]],
+    does:"deletes background points whose whole north side is outside C — the row of background lying directly under A." },
+  { name:"B²", m:[["x",0,0],[1,1,0],["x",1,"x"]],
+    does:"deletes background points tucked into a north-east corner of A." },
+  { name:"B³", m:[[1,"x",0],[1,1,0],[1,"x",0]],
+    does:"deletes background points whose whole east side is outside C — the column of background lying to the left of A." },
+  { name:"B⁴", m:[["x",1,"x"],[1,1,0],["x",0,0]],
+    does:"deletes background points tucked into a south-east corner of A." },
+  { name:"B⁵", m:[[1,1,1],["x",1,"x"],[0,0,0]],
+    does:"deletes background points whose whole south side is outside C — the row of background lying above A." },
+  { name:"B⁶", m:[["x",1,"x"],[0,1,1],[0,0,"x"]],
+    does:"deletes background points tucked into a south-west corner of A." },
+  { name:"B⁷", m:[[0,"x",1],[0,1,1],[0,"x",1]],
+    does:"deletes background points whose whole west side is outside C — the column of background lying to the right of A." },
+  { name:"B⁸", m:[[0,0,"x"],[0,1,1],["x",1,"x"]],
+    does:"deletes background points tucked into a north-west corner of A." }
+];
+
+/* ══════════════════════════════════════════════════════════════
+   3 · Morphology
+   ══════════════════════════════════════════════════════════════ */
+/* Outside the drawn window counts as background of A, i.e. part of C. */
+function get(g, r, c, oob){
+  if (r < 0 || r >= ROWS || c < 0 || c >= COLS) return oob;
+  return g[IDX(r, c)];
+}
+function probeAt(g, r, c, m, oob){
+  const cells = [];
+  let ok = true, first = null;
+  for (let dr = -1; dr <= 1; dr++){
+    for (let dc = -1; dc <= 1; dc++){
+      const t = m[dr + 1][dc + 1];
+      const v = get(g, r + dr, c + dc, oob);
+      const pass = (t === "x") ? null : (t === v);
+      if (pass === false){ ok = false; if (!first) first = { dr, dc, t, v }; }
+      cells.push({ dr, dc, t, v, pass });
+    }
+  }
+  return { ok, cells, first };
+}
+function complement(g){
+  const o = new Uint8Array(g.length);
+  for (let i = 0; i < g.length; i++) o[i] = g[i] ? 0 : 1;
+  return o;
+}
+/* 8-connected components of the ON cells of g */
+function components(g){
+  const seen = new Int32Array(g.length).fill(-1);
+  const comps = [];
+  for (let i = 0; i < g.length; i++){
+    if (!g[i] || seen[i] >= 0) continue;
+    const id = comps.length, stack = [i], members = [];
+    seen[i] = id;
+    while (stack.length){
+      const p = stack.pop(); members.push(p);
+      const r = (p / COLS) | 0, c = p % COLS;
+      for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++){
+        const nr = r + dr, nc = c + dc;
+        if (nr < 0 || nr >= ROWS || nc < 0 || nc >= COLS) continue;
+        const q = IDX(nr, nc);
+        if (g[q] && seen[q] < 0){ seen[q] = id; stack.push(q); }
+      }
+    }
+    comps.push(members);
+  }
+  return comps;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   4 · Build every micro-step of the run
+   ══════════════════════════════════════════════════════════════ */
+let steps = [], plates = {};
+
+function rc(i){ return "r" + (((i / COLS) | 0)) + " · c" + (i % COLS); }
+
+function buildSteps(skipEmpty){
+  const out = [];
+  const push = o => out.push(Object.assign({
+    phase:"setup", view:"A", grid:null, ghost:true, cursor:null, se:null,
+    detail:null, marks:[], gains:[], title:"", where:"", text:"", verdict:null,
+    vclass:"v-info", pass:"–", deleted:0
+  }, o));
+
+  /* ---- stage a : the set A ---------------------------------- */
+  push({
+    phase:"a", view:"A", grid:A.slice(), ghost:false,
+    title:"Set A",
+    text:"The set to be thickened. Filled cells belong to A; everything else, inside the window and beyond it, is background.",
+    verdict:"stage a", vclass:"v-info"
+  });
+
+  /* ---- stage b : complement, one row at a time --------------- */
+  let C = A.slice();
+  push({
+    phase:"b", view:"C", grid:C.slice(),
+    title:"Form C = Aᶜ",
+    text:"Every cell flips. What was A becomes empty, what was empty becomes C. The dashed outlines keep the original A visible from here on.",
+    verdict:"stage b", vclass:"v-info"
+  });
+  for (let r = 0; r < ROWS; r++){
+    for (let c = 0; c < COLS; c++) C[IDX(r, c)] = A[IDX(r, c)] ? 0 : 1;
+    push({
+      phase:"b", view:"C", grid:C.slice(), cursor:{ r, c:-99 },
+      title:"Form C = Aᶜ",
+      where:"row " + r,
+      text:"Row " + r + " flipped. C now holds every cell of this row that was not in A.",
+      verdict:"flipping", vclass:"v-info"
+    });
+  }
+  plates.b = C.slice();
+
+  /* ---- stage c : thin C with B¹ … B⁸ ------------------------- */
+  let deletedTotal = 0;
+  for (let s = 0; s < SES.length; s++){
+    const se = SES[s];
+    push({
+      phase:"c", view:"C", grid:C.slice(), se:s, pass:(s + 1) + "/8", deleted:deletedTotal,
+      title:"Pass " + (s + 1) + " — thin C with " + se.name,
+      text:"This element " + se.does + " The probe will now visit the lattice cell by cell; every position where the template fits exactly is marked, and all marks are deleted together at the end of the pass.",
+      verdict:"pass " + (s + 1) + " begins", vclass:"v-info"
+    });
+
+    const marks = [];
+    for (let r = 0; r < ROWS; r++){
+      for (let c = 0; c < COLS; c++){
+        const inC = C[IDX(r, c)] === 1;
+        if (skipEmpty && !inC) continue;
+
+        const d = probeAt(C, r, c, se.m, 1);
+        let text, verdict, vclass;
+
+        if (!inC){
+          text = "The centre of " + se.name + " must be a point of C, and this cell is outside C. The element cannot sit here at all.";
+          verdict = "centre empty — skip"; vclass = "v-no";
+        } else if (d.ok){
+          text = "All nine positions agree with " + se.name + ". This point of C is on the boundary the element is looking for, so it is marked for deletion.";
+          verdict = "match — mark for deletion"; vclass = "v-hit";
+        } else {
+          const f = d.first;
+          const nr = r + f.dr, nc = c + f.dc;
+          const inside = (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS);
+          text = "The template asks for the cell at r" + nr + " · c" + nc +
+                 (inside ? "" : " (outside the window)") +
+                 " to be " + (f.t === 1 ? "inside C" : "outside C") +
+                 ", but it is " + (f.v === 1 ? "inside C" : "outside C") + ". No fit.";
+          verdict = "no match"; vclass = "v-no";
+        }
+
+        if (d.ok) marks.push(IDX(r, c));
+
+        push({
+          phase:"c", view:"C", grid:C.slice(), se:s, cursor:{ r, c }, detail:d,
+          marks:marks.slice(), pass:(s + 1) + "/8", deleted:deletedTotal,
+          title:"Pass " + (s + 1) + " — probing with " + se.name,
+          where:"probe centre  r" + r + " · c" + c,
+          text, verdict, vclass, isHit:d.ok
+        });
+      }
+    }
+
+    /* delete everything marked in this pass */
+    const C2 = C.slice();
+    marks.forEach(i => C2[i] = 0);
+    deletedTotal += marks.length;
+    push({
+      phase:"c", view:"C", grid:C2.slice(), se:s, marks:[], pass:(s + 1) + "/8", deleted:deletedTotal,
+      title:"Pass " + (s + 1) + " — delete the marks",
+      text: marks.length
+        ? marks.length + " point" + (marks.length === 1 ? "" : "s") + " removed from C in one shot. " +
+          (s < 7 ? "Pass " + (s + 2) + " will work on this reduced C." : "The cycle through the eight elements is complete.")
+        : se.name + " found nothing to delete on this lattice. C is unchanged and the cycle moves on.",
+      verdict: marks.length + " deleted", vclass: marks.length ? "v-hit" : "v-no"
+    });
+    C = C2;
+  }
+  plates.c = C.slice();
+
+  /* ---- stage d : complement back ----------------------------- */
+  const T = complement(C);
+  push({
+    phase:"d", view:"T", grid:C.slice(), pass:"–", deleted:deletedTotal,
+    title:"Take Cᶜ",
+    text:"The thinned background is turned inside out again. Every cell the thinning took away from C is a cell the set has gained.",
+    verdict:"stage d", vclass:"v-info"
+  });
+  {
+    const partial = C.slice();
+    for (let r = 0; r < ROWS; r++){
+      for (let c = 0; c < COLS; c++) partial[IDX(r, c)] = C[IDX(r, c)] ? 0 : 1;
+      push({
+        phase:"d", view:"T", grid:partial.slice(), cursor:{ r, c:-99 },
+        pass:"–", deleted:deletedTotal,
+        title:"Take Cᶜ",
+        where:"row " + r,
+        text:"Row " + r + " flipped back. Cells shown in green were not in A — the thickening gained them.",
+        verdict:"flipping", vclass:"v-info"
+      });
+    }
+  }
+  plates.d = T.slice();
+
+  /* ---- stage e : drop disconnected points -------------------- */
+  const comps = components(T);
+  const strays = comps.filter(m => m.every(i => A[i] === 0));
+  const final = T.slice();
+  push({
+    phase:"e", view:"T", grid:T.slice(), pass:"–", deleted:deletedTotal,
+    title:"Look for disconnected points",
+    text:"The thickened set is checked for material that is not 8-connected to the original A. " +
+         (strays.length
+           ? strays.length + " such component" + (strays.length === 1 ? "" : "s") + " found."
+           : "None found on this lattice: every point the thinning gave back touches A, so stage (e) leaves the result unchanged. Strays appear when several thickening cycles are run in a row."),
+    verdict: strays.length ? strays.length + " stray component(s)" : "nothing to remove", vclass: strays.length ? "v-hit" : "v-no"
+  });
+  strays.forEach((mem, k) => {
+    mem.forEach(i => final[i] = 0);
+    push({
+      phase:"e", view:"T", grid:final.slice(), pass:"–", deleted:deletedTotal,
+      title:"Drop disconnected points",
+      where:"component " + (k + 1) + " · " + mem.length + " cell(s) at " + rc(mem[0]),
+      text:"This component touches no part of the original A, so it is discarded.",
+      verdict:"removed", vclass:"v-hit"
+    });
+  });
+  plates.e = final.slice();
+
+  const gained = final.reduce((n, v, i) => n + (v && !A[i] ? 1 : 0), 0);
+  push({
+    phase:"e", view:"T", grid:final.slice(), pass:"–", deleted:deletedTotal,
+    title:"A ⊙ {B} — done",
+    text:"One layer of background has been stripped all the way round A, the notch is closed, and " + gained +
+         " cells have been added to the original " + A.reduce((n, v) => n + v, 0) + ". The growth is not perfectly symmetric, and that is the algorithm, not a fault: each element works on the C left behind by the previous one, so a cell already taken can block a later match. Run the cycle again on this result and the set grows by another layer.",
+    verdict:"final result", vclass:"v-info"
+  });
+
+  plates.a = A.slice();
+  return out;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   5 · Rendering
+   ══════════════════════════════════════════════════════════════ */
+const el = id => document.getElementById(id);
+const latticeEl = el("lattice"), probeEl = el("probe");
+let cells = [];
+
+function buildLattice(){
+  latticeEl.style.gridTemplateColumns = "repeat(" + COLS + ", var(--cell))";
+  latticeEl.innerHTML = "";
+  cells = [];
+  for (let i = 0; i < ROWS * COLS; i++){
+    const d = document.createElement("div");
+    d.className = "cell";
+    d.dataset.i = i;
+    latticeEl.appendChild(d);
+    cells.push(d);
+  }
+  const rt = el("rulerTop");
+  rt.style.gridTemplateColumns = "repeat(" + COLS + ", var(--cell))";
+  rt.innerHTML = "";
+  for (let c = 0; c < COLS; c++){
+    const s = document.createElement("span");
+    s.textContent = c;
+    rt.appendChild(s);
+  }
+}
+
+function buildMini(node){
+  node.innerHTML = "";
+  const out = [];
+  for (let i = 0; i < 9; i++){
+    const d = document.createElement("div");
+    node.appendChild(d);
+    out.push(d);
+  }
+  return out;
+}
+const seCells = buildMini(el("seGrid"));
+const nbCells = buildMini(el("nbGrid"));
+
+const VIEW_LABEL = { A:"viewing A", C:"viewing C = Aᶜ", T:"viewing the thickened set" };
+
+function render(i){
+  const st = steps[i];
+  if (!st) return;
+  const g = st.grid;
+  const markSet = new Set(st.marks);
+
+  for (let k = 0; k < cells.length; k++){
+    const d = cells[k];
+    let cls = "cell";
+    if (markSet.has(k)) cls += " marked";
+    else if (g[k]) cls += (st.view === "T" && !A[k]) ? " gain" : " set";
+    if (st.phase !== "a" && A[k]) cls += " ghost";
+    if (st.cursor && st.cursor.c === -99 && ((k / COLS) | 0) === st.cursor.r) cls += " rowlit";
+    if (editing) cls += " edit";
+    d.className = cls;
+  }
+
+  /* probe */
+  if (st.cursor && st.cursor.c >= 0){
+    const pitch = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--pitch"));
+    probeEl.classList.remove("hidden");
+    probeEl.classList.toggle("hit", !!st.isHit);
+    probeEl.style.transform = "translate(" + ((st.cursor.c - 1) * pitch + 1) + "px," +
+                                             ((st.cursor.r - 1) * pitch + 1) + "px)";
+  } else {
+    probeEl.classList.add("hidden");
+  }
+
+  /* structuring element + neighbourhood readout */
+  if (st.se !== null && st.se !== undefined){
+    const se = SES[st.se];
+    el("seName").textContent = se.name;
+    for (let k = 0; k < 9; k++){
+      const t = se.m[(k / 3) | 0][k % 3];
+      const d = st.detail ? st.detail.cells[k] : null;
+      seCells[k].textContent = t === "x" ? "·" : t;
+      seCells[k].className = (t === 1 ? "t1" : t === 0 ? "t0" : "tx") +
+        (k === 4 ? " ctr" : "") +
+        (d && d.pass === true ? " pass" : d && d.pass === false ? " fail" : "");
+      if (d){
+        nbCells[k].textContent = d.v;
+        nbCells[k].className = (d.v === 1 ? "t1" : "t0") + (k === 4 ? " ctr" : "") +
+          (d.pass === true ? " pass" : d.pass === false ? " fail" : "");
+      } else {
+        nbCells[k].textContent = "";
+        nbCells[k].className = "t0";
+      }
+    }
+  } else {
+    el("seName").textContent = "—";
+    seCells.forEach(d => { d.textContent = ""; d.className = "t0"; });
+    nbCells.forEach(d => { d.textContent = ""; d.className = "t0"; });
+  }
+
+  el("plateTitle").textContent = st.title;
+  el("viewBadge").textContent = VIEW_LABEL[st.view];
+  el("viewBadge").classList.toggle("on", st.view === "C");
+  el("nWhere").textContent = st.where || "";
+  el("nTitle").textContent = st.title;
+  el("nText").textContent = st.text;
+  const v = el("nVerdict");
+  v.textContent = st.verdict || "";
+  v.className = "verdict mono " + (st.vclass || "v-info");
+  v.style.display = st.verdict ? "inline-block" : "none";
+
+  el("tPass").textContent = st.pass;
+  el("tMarked").textContent = st.marks.length;
+  el("tDeleted").textContent = st.deleted;
+
+  el("counter").textContent = "step " + (i + 1) + " / " + steps.length;
+  el("scrubber").value = i;
+
+  /* plate strip */
+  const order = ["a", "b", "c", "d", "e"];
+  const reached = order.indexOf(st.phase);
+  document.querySelectorAll("#strip figure").forEach((f, k) => {
+    f.classList.toggle("live", k <= reached);
+  });
+}
+
+function buildStrip(){
+  const meta = [
+    ["a", "Set A"], ["b", "Complement of A"], ["c", "Thinned complement"],
+    ["d", "Complemented back"], ["e", "Final result"]
+  ];
+  const strip = el("strip");
+  strip.innerHTML = "";
+  meta.forEach(([key, label]) => {
+    const fig = document.createElement("figure");
+    const cap = document.createElement("figcaption");
+    cap.innerHTML = "<b>" + key + "</b> · " + label;
+    const th = document.createElement("div");
+    th.className = "thumb";
+    th.style.gridTemplateColumns = "repeat(" + COLS + ", 8px)";
+    const g = plates[key];
+    for (let i = 0; i < ROWS * COLS; i++){
+      const s = document.createElement("i");
+      if (g[i]) s.className = "on";
+      th.appendChild(s);
+    }
+    fig.appendChild(cap);
+    fig.appendChild(th);
+    strip.appendChild(fig);
+  });
+}
+
+/* ══════════════════════════════════════════════════════════════
+   6 · Transport
+   ══════════════════════════════════════════════════════════════ */
+let cur = 0, timer = null, playing = false, editing = false;
+
+function goto(i){
+  cur = Math.max(0, Math.min(steps.length - 1, i));
+  render(cur);
+  if (cur === steps.length - 1) stop();
+  syncButtons();
+}
+function syncButtons(){
+  el("btnPrev").disabled = cur === 0;
+  el("btnRestart").disabled = cur === 0;
+  el("btnNext").disabled = cur === steps.length - 1;
+  el("btnNextPhase").disabled = cur === steps.length - 1;
+  el("btnNextHit").disabled = cur === steps.length - 1;
+  el("btnPrevPhase").disabled = cur === 0;
+}
+function tick(){
+  if (cur >= steps.length - 1){ stop(); return; }
+  goto(cur + 1);
+  if (playing && el("optPauseHit").checked && steps[cur].isHit){ stop(); return; }
+  if (playing) timer = setTimeout(tick, +el("speed").value);
+}
+function play(){
+  if (cur >= steps.length - 1) goto(0);
+  playing = true;
+  el("btnPlay").textContent = "⏸ Pause";
+  timer = setTimeout(tick, +el("speed").value);
+}
+function stop(){
+  playing = false;
+  clearTimeout(timer);
+  el("btnPlay").textContent = "▶ Play";
+}
+function jumpPhase(dir){
+  const here = steps[cur].phase;
+  let i = cur;
+  if (dir > 0){
+    while (i < steps.length - 1 && steps[i].phase === here) i++;
+  } else {
+    while (i > 0 && steps[i].phase === here) i--;
+    const p = steps[i].phase;
+    while (i > 0 && steps[i - 1].phase === p) i--;
+  }
+  goto(i);
+}
+function nextHit(){
+  for (let i = cur + 1; i < steps.length; i++){
+    if (steps[i].isHit){ goto(i); return; }
+  }
+  goto(steps.length - 1);
+}
+
+function rebuild(keepIndex){
+  stop();
+  steps = buildSteps(el("optSkipEmpty").checked);
+  el("scrubber").max = steps.length - 1;
+  buildStrip();
+  goto(keepIndex ? Math.min(cur, steps.length - 1) : 0);
+}
+
+/* wiring */
+el("btnPlay").addEventListener("click", () => playing ? stop() : play());
+el("btnNext").addEventListener("click", () => { stop(); goto(cur + 1); });
+el("btnPrev").addEventListener("click", () => { stop(); goto(cur - 1); });
+el("btnRestart").addEventListener("click", () => { stop(); goto(0); });
+el("btnNextPhase").addEventListener("click", () => { stop(); jumpPhase(1); });
+el("btnPrevPhase").addEventListener("click", () => { stop(); jumpPhase(-1); });
+el("btnNextHit").addEventListener("click", () => { stop(); nextHit(); });
+el("scrubber").addEventListener("input", e => { stop(); goto(+e.target.value); });
+el("speed").addEventListener("input", e => { el("speedOut").textContent = e.target.value + " ms"; });
+el("optSkipEmpty").addEventListener("change", () => rebuild(false));
+
+el("optEdit").addEventListener("change", e => {
+  editing = e.target.checked;
+  if (editing) stop();
+  render(cur);
+});
+latticeEl.addEventListener("click", e => {
+  if (!editing) return;
+  const t = e.target.closest(".cell");
+  if (!t) return;
+  const i = +t.dataset.i;
+  A[i] = A[i] ? 0 : 1;
+  rebuild(false);
+});
+
+document.addEventListener("keydown", e => {
+  if (e.target.tagName === "INPUT" || e.target.tagName === "BUTTON") return;
+  if (e.key === "ArrowRight"){ e.preventDefault(); stop(); goto(cur + 1); }
+  if (e.key === "ArrowLeft"){ e.preventDefault(); stop(); goto(cur - 1); }
+  if (e.key === " "){ e.preventDefault(); playing ? stop() : play(); }
+});
+
+window.addEventListener("resize", () => render(cur));
+
+/* go */
+buildLattice();
+rebuild(false);
+</script>
+</body>
+</html>
