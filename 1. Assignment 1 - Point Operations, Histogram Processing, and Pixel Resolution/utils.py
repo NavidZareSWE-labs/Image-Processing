@@ -13,21 +13,21 @@ def compute_mse(img_a, img_b):
 
 def compute_psnr(img_a, img_b, max_val=255.0):
     """
-        Calculates the Peak Signal-to-Noise Ratio (PSNR) between two images.
+    Calculates the Peak Signal-to-Noise Ratio (PSNR) between two images.
 
-        PSNR tells you how closely a degraded/processed image matches the original
-        image.
+    PSNR tells you how closely a degraded/processed image matches the original
+    image.
 
-        Interpretation:
-            * Higher PSNR = Better Quality: A higher number means there is very
-            little noise compared to the signal. The images look very similar.
-            * Lower PSNR = Worse Quality: A lower number means the error/noise
-            is large. The image is likely blurry, pixelated, or distorted.
+    Interpretation:
+        * Higher PSNR = Better Quality: A higher number means there is very
+        little noise compared to the signal. The images look very similar.
+        * Lower PSNR = Worse Quality: A lower number means the error/noise
+        is large. The image is likely blurry, pixelated, or distorted.
     """
     mse = compute_mse(img_a, img_b)
     if mse == 0.0:
-        return float('inf')
-    return 10.0 * np.log10(max_val ** 2 / mse)
+        return float("inf")
+    return 10.0 * np.log10(max_val**2 / mse)
 
 
 def to_gray(img):

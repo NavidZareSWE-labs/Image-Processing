@@ -1,13 +1,20 @@
 from utils import get_r_range, compute_mse, to_gray
-from visualize import plot_transform_s2, plot_gamma_curves_family_s2, plot_piecewise_linear_stretching_s2, plot_all_bitplanes_s2, plot_bitplane_reconstruction_comparison_s2
+from visualize import (
+    plot_transform_s2,
+    plot_gamma_curves_family_s2,
+    plot_piecewise_linear_stretching_s2,
+    plot_all_bitplanes_s2,
+    plot_bitplane_reconstruction_comparison_s2,
+)
 import os
 import matplotlib.pyplot as plt
 import numpy as np
 import cv2
 import matplotlib
-matplotlib.use('Agg')
 
-os.makedirs('output/section2', exist_ok=True)
+matplotlib.use("Agg")
+
+os.makedirs("output/section2", exist_ok=True)
 
 
 def apply_negative(img):
@@ -20,23 +27,31 @@ def run_negative():
     print("\n[2.1a] Image Negative")
 
     # --- Grayscale ---
-    moon = cv2.imread('Images/Section 2/moon.tif', cv2.IMREAD_UNCHANGED)
+    moon = cv2.imread("Images/Section 2/moon.tif", cv2.IMREAD_UNCHANGED)
     neg_moon = apply_negative(moon)
     r_range = get_r_range()
-    plot_transform_s2(moon, neg_moon,
-                      r_range, 255 - r_range,
-                      "Image Negative  s = L - 1 - r  (Grayscale: moon.tif)",
-                      subtitles=("Original (moon)", "Negative"),
-                      save_path="output/section2/negative_moon.png")
+    plot_transform_s2(
+        moon,
+        neg_moon,
+        r_range,
+        255 - r_range,
+        "Image Negative  s = L - 1 - r  (Grayscale: moon.tif)",
+        subtitles=("Original (moon)", "Negative"),
+        save_path="output/section2/negative_moon.png",
+    )
 
     # --- Color ---
-    peppers = cv2.imread('Images/Section 2/peppers.png')
+    peppers = cv2.imread("Images/Section 2/peppers.png")
     neg_peppers = apply_negative(peppers)
-    plot_transform_s2(peppers, neg_peppers,
-                      r_range, 255 - r_range,
-                      "Image Negative  s = L - 1 - r  (Color: peppers.png)",
-                      subtitles=("Original (peppers)", "Negative"),
-                      save_path="output/section2/negative_peppers.png")
+    plot_transform_s2(
+        peppers,
+        neg_peppers,
+        r_range,
+        255 - r_range,
+        "Image Negative  s = L - 1 - r  (Color: peppers.png)",
+        subtitles=("Original (peppers)", "Negative"),
+        save_path="output/section2/negative_peppers.png",
+    )
 
 
 def apply_log(img_gray, c=None):
@@ -53,7 +68,7 @@ def run_log_transform():
     print("\n[2.1b] Logarithmic Transformation")
 
     #  high dynamic range image (Fourier spectrum image)
-    img = cv2.imread('Images/Section 2/2.png')
+    img = cv2.imread("Images/Section 2/2.png")
     img_gray = to_gray(img)
 
     c = 255.0 / np.log(256.0)
@@ -62,11 +77,15 @@ def run_log_transform():
     r_range = get_r_range()
     s = np.clip(c * np.log1p(r_range), 0, 255)
 
-    plot_transform_s2(img_gray, transformed,
-                      r_range, s,
-                      f"Logarithmic Transform  s = c·log(1+r),  c = {c:.2f}  (2.png)",
-                      subtitles=("Original", "Log-transformed"),
-                      save_path="output/section2/log_transform.png")
+    plot_transform_s2(
+        img_gray,
+        transformed,
+        r_range,
+        s,
+        f"Logarithmic Transform  s = c·log(1+r),  c = {c:.2f}  (2.png)",
+        subtitles=("Original", "Log-transformed"),
+        save_path="output/section2/log_transform.png",
+    )
 
 
 def apply_gamma(img_gray, gamma):
@@ -85,12 +104,11 @@ def run_gamma_correction():
     print("\n[2.1c] Power-Law (Gamma) Correction")
 
     # Under-exposed (dark) image -> gamma < 1 brightens it
-    under_exposed_image = cv2.imread(
-        'Images/Section 2/trees.tif', cv2.IMREAD_UNCHANGED)
+    under_exposed_image = cv2.imread("Images/Section 2/trees.tif", cv2.IMREAD_UNCHANGED)
     under_exposed_gray = to_gray(under_exposed_image)
 
     # Over-exposed (washed-out) image -> gamma > 1 darkens it
-    over_exposed_image = cv2.imread('Images/Section 2/low contrast.jpg')
+    over_exposed_image = cv2.imread("Images/Section 2/low contrast.jpg")
     if over_exposed_image.ndim == 3:
         over_exposed_gray = to_gray(over_exposed_image)
     else:
@@ -99,25 +117,48 @@ def run_gamma_correction():
     r_range = get_r_range()
 
     test_cases = [
-        (under_exposed_gray,  0.40, "gamma=0.40",  "gamma_under_exposed",
-         "Under-exposed (trees.tif)  gamma=0.40 < 1 -> brightens"),
-        (under_exposed_gray,  0.25, "gamma=0.25",  "gamma_under_exposed_025",
-         "Under-exposed (trees.tif)  gamma=0.25 < 1 -> brightens strongly"),
-        (over_exposed_gray, 2.50, "gamma=2.50",  "gamma_over_exposed",
-         "Over-exposed (low contrast.jpg)  gamma=2.50 > 1 -> darkens"),
-        (over_exposed_gray, 1.80, "gamma=1.80",  "gamma_over_exposed_180",
-         "Over-exposed (low contrast.jpg)  gamma=1.80 > 1 -> darkens moderately"),
+        (
+            under_exposed_gray,
+            0.40,
+            "gamma=0.40",
+            "gamma_under_exposed",
+            "Under-exposed (trees.tif)  gamma=0.40 < 1 -> brightens",
+        ),
+        (
+            under_exposed_gray,
+            0.25,
+            "gamma=0.25",
+            "gamma_under_exposed_025",
+            "Under-exposed (trees.tif)  gamma=0.25 < 1 -> brightens strongly",
+        ),
+        (
+            over_exposed_gray,
+            2.50,
+            "gamma=2.50",
+            "gamma_over_exposed",
+            "Over-exposed (low contrast.jpg)  gamma=2.50 > 1 -> darkens",
+        ),
+        (
+            over_exposed_gray,
+            1.80,
+            "gamma=1.80",
+            "gamma_over_exposed_180",
+            "Over-exposed (low contrast.jpg)  gamma=1.80 > 1 -> darkens moderately",
+        ),
     ]
 
     for img_gray, gamma_val, plt_lable, fname, title in test_cases:
         gamma_corrected_image = apply_gamma(img_gray, gamma_val)
         s_curve = np.clip(255.0 * np.power(r_range / 255.0, gamma_val), 0, 255)
-        plot_transform_s2(img_gray, gamma_corrected_image,
-                          r_range, s_curve,
-                          f"Gamma Correction  s = 255·(r/255)^γ  - {title}",
-                          subtitles=(
-                              "Original", f"Gamma-corrected ({plt_lable})"),
-                          save_path=f"output/section2/{fname}.png")
+        plot_transform_s2(
+            img_gray,
+            gamma_corrected_image,
+            r_range,
+            s_curve,
+            f"Gamma Correction  s = 255·(r/255)^γ  - {title}",
+            subtitles=("Original", f"Gamma-corrected ({plt_lable})"),
+            save_path=f"output/section2/{fname}.png",
+        )
 
     plot_gamma_curves_family_s2(r_range)
 
@@ -147,7 +188,7 @@ def apply_piecewise_linear(img_gray):
 def run_piecewise_linear():
     print("\n[2.1d] Piecewise-Linear Contrast Stretching")
 
-    low_con = cv2.imread('Images/Section 2/low contrast.jpg')
+    low_con = cv2.imread("Images/Section 2/low contrast.jpg")
     img_gray = to_gray(low_con)
     enhanced = apply_piecewise_linear(img_gray)
 
@@ -164,7 +205,7 @@ def extract_bitplanes(img_gray):
 def run_bitplane_slicing():
     print("\n[2.2] Bit-Plane Slicing")
 
-    path = 'Images/Section 2/einstein.jpg'
+    path = "Images/Section 2/einstein.jpg"
     img = cv2.imread(path, cv2.IMREAD_UNCHANGED)
     img_gray = to_gray(img)
 
@@ -175,19 +216,20 @@ def run_bitplane_slicing():
     # ----- Reconstruct from top 4 MSBs (planes 7,6,5,4) -----
     recon_msb = np.zeros_like(img_gray, dtype=np.uint8)
     for k in range(4, 8):
-        recon_msb = recon_msb + (bitplanes[k] * (2 ** k)).astype(np.uint8)
+        recon_msb = recon_msb + (bitplanes[k] * (2**k)).astype(np.uint8)
 
     # ----- Reconstruct from bottom 4 LSBs (planes 3,2,1,0) -----
     recon_lsb = np.zeros_like(img_gray, dtype=np.uint8)
     for k in range(0, 4):
-        recon_lsb = recon_lsb + (bitplanes[k] * (2 ** k)).astype(np.uint8)
+        recon_lsb = recon_lsb + (bitplanes[k] * (2**k)).astype(np.uint8)
 
     mse_msb = compute_mse(img_gray, recon_msb)
     mse_lsb = compute_mse(img_gray, recon_lsb)
 
     # Comparison figure
     plot_bitplane_reconstruction_comparison_s2(
-        img_gray, bitplanes, recon_msb, recon_lsb, mse_msb, mse_lsb)
+        img_gray, bitplanes, recon_msb, recon_lsb, mse_msb, mse_lsb
+    )
     print(f"\n  MSE (original vs. top-4-MSB reconstruction): {mse_msb:.2f}")
     print(f"  MSE (original vs. bot-4-LSB reconstruction): {mse_lsb:.2f}")
 

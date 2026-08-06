@@ -18,41 +18,44 @@ def _timed(label: str, fn):
     t0 = time.time()
     fn()
     elapsed = time.time() - t0
-    print(f'\n {label} completed in {elapsed:.1f} s\n')
+    print(f"\n {label} completed in {elapsed:.1f} s\n")
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description='DIP Homework 1 - run all sections')
-    parser.add_argument('--section', type=int, default=None,
-                        choices=[0, 1, 2, 3, 4],
-                        help='Run only this section (default: run all)')
+    parser = argparse.ArgumentParser(description="DIP Homework 1 - run all sections")
+    parser.add_argument(
+        "--section",
+        type=int,
+        default=None,
+        choices=[0, 1, 2, 3, 4],
+        help="Run only this section (default: run all)",
+    )
     args = parser.parse_args()
 
     sections = {
-        0: ('Section 0 - Diamond Pattern Embedding', run_utils),
-        1: ('Section 1 - Pixel Resolution & Interpolation',  run_section1),
-        2: ('Section 2 - Point Operations & Bit-Plane Slicing', run_section2),
-        3: ('Section 3 - Histogram Equalization (GHE + LHE)', run_section3),
-        4: ('Section 4 - Histogram Matching & Color Spaces',  run_section4),
+        0: ("Section 0 - Diamond Pattern Embedding", run_utils),
+        1: ("Section 1 - Pixel Resolution & Interpolation", run_section1),
+        2: ("Section 2 - Point Operations & Bit-Plane Slicing", run_section2),
+        3: ("Section 3 - Histogram Equalization (GHE + LHE)", run_section3),
+        4: ("Section 4 - Histogram Matching & Color Spaces", run_section4),
     }
 
     if args.section is not None:
         label, fn = sections[args.section]
         _timed(label, fn)
     else:
-        print('=' * 65)
-        print('  DIP Homework 1 - Running all sections')
-        print('=' * 65)
+        print("=" * 65)
+        print("  DIP Homework 1 - Running all sections")
+        print("=" * 65)
         t_total = time.time()
         for sec_id, (label, fn) in sections.items():
             _timed(label, fn)
         total = time.time() - t_total
-        print('=' * 65)
-        print(f'  All sections done.  Total time: {total:.1f} s')
-        print('  Outputs saved under  output/section{{0..4}}/')
-        print('=' * 65)
+        print("=" * 65)
+        print(f"  All sections done.  Total time: {total:.1f} s")
+        print("  Outputs saved under  output/section{{0..4}}/")
+        print("=" * 65)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

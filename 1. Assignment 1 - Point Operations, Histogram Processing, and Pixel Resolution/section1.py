@@ -6,9 +6,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import cv2
 import matplotlib
-matplotlib.use('Agg')
 
-os.makedirs('output/section1', exist_ok=True)
+matplotlib.use("Agg")
+
+os.makedirs("output/section1", exist_ok=True)
 
 
 def downsample(img, N):
@@ -45,8 +46,7 @@ def upsample_bilinear(img_down, tgt_height, tgt_width, N):
 
     # Initialize empty output array
     if is_color:
-        out_img = np.zeros(
-            (tgt_height, tgt_width, img_down.shape[2]), dtype=np.float32)
+        out_img = np.zeros((tgt_height, tgt_width, img_down.shape[2]), dtype=np.float32)
     else:
         out_img = np.zeros((tgt_height, tgt_width), dtype=np.float32)
 
@@ -86,7 +86,7 @@ def upsample_bicubic(img_down, tgt_height, tgt_width, N):
             return 0.0
 
     src_height, src_width = img_down.shape[:2]
-    is_color = (img_down.ndim == 3)
+    is_color = img_down.ndim == 3
 
     fy = np.arange(tgt_height) / float(N)
     fx = np.arange(tgt_width) / float(N)
@@ -135,8 +135,7 @@ def upsample_bicubic(img_down, tgt_height, tgt_width, N):
         return out_img
 
     if is_color:
-        out_img = np.zeros((tgt_height, tgt_width, img_down.shape[2]),
-                           dtype=np.float64)
+        out_img = np.zeros((tgt_height, tgt_width, img_down.shape[2]), dtype=np.float64)
         for c in range(img_down.shape[2]):
             out_img[:, :, c] = _interp_channel(img_down[:, :, c])
     else:
@@ -148,7 +147,7 @@ def upsample_bicubic(img_down, tgt_height, tgt_width, N):
 def crop_patch(img, row_start, col_start, patch_h=60, patch_w=60):
     r1 = min(row_start, img.shape[0] - patch_h)
     c1 = min(col_start, img.shape[1] - patch_w)
-    return img[r1: r1 + patch_h, c1: c1 + patch_w]
+    return img[r1 : r1 + patch_h, c1 : c1 + patch_w]
 
 
 def process_image(img_path, img_name, factors=(2, 4, 8)):
@@ -161,9 +160,9 @@ def process_image(img_path, img_name, factors=(2, 4, 8)):
     tgt_height, tgt_width = original.shape[:2]
 
     methods = {
-        'Nearest\nNeighbour': upsample_nn,
-        'Bilinear': upsample_bilinear,
-        'Bicubic': upsample_bicubic,
+        "Nearest\nNeighbour": upsample_nn,
+        "Bilinear": upsample_bilinear,
+        "Bicubic": upsample_bicubic,
     }
 
     metrics = {}
@@ -172,57 +171,64 @@ def process_image(img_path, img_name, factors=(2, 4, 8)):
         downsampled = downsample(original, scale_fact)
         downsampled_height, downsampled_width = downsampled.shape[:2]
         print(
-            f"  N={scale_fact}: original {tgt_height}x{tgt_width} -> downsampled {downsampled_height}x{downsampled_width}")
+            f"  N={scale_fact}: original {tgt_height}x{tgt_width} -> downsampled {downsampled_height}x{downsampled_width}"
+        )
 
         plt_num_cols = 1 + len(methods)
-        plt_fig, plt_axes = plt.subplots(
-            1, plt_num_cols, figsize=(5 * plt_num_cols, 5))
+        plt_fig, plt_axes = plt.subplots(1, plt_num_cols, figsize=(5 * plt_num_cols, 5))
         plt_fig.suptitle(
-            f"{img_name} | Downsampling factor N={scale_fact}", fontsize=12)
+            f"{img_name} | Downsampling factor N={scale_fact}", fontsize=12
+        )
 
         def _show(ax, im, title, is_col):
             if is_col:
                 ax.imshow(cv2.cvtColor(im, cv2.COLOR_BGR2RGB))
             else:
-                ax.imshow(im, cmap='gray', vmin=0, vmax=255)
+                ax.imshow(im, cmap="gray", vmin=0, vmax=255)
             ax.set_title(title, fontsize=9)
-            ax.axis('off')
+            ax.axis("off")
 
         _show(plt_axes[0], original, "Original\n(reference)", is_color)
 
         for col_idx, (method_name, upsample_fn) in enumerate(methods.items(), start=1):
-            upsampled = upsample_fn(
-                downsampled, tgt_height, tgt_width, scale_fact)
+            upsampled = upsample_fn(downsampled, tgt_height, tgt_width, scale_fact)
             mse = compute_mse(original, upsampled)
             psnr = compute_psnr(original, upsampled)
-            clean_method_name = method_name.replace('\n', ' ')
+            clean_method_name = method_name.replace("\n", " ")
             metrics[(scale_fact, clean_method_name)] = (mse, psnr)
             plt_label = f"{method_name}\nMSE={mse:.2f} | PSNR={psnr:.2f} dB"
             _show(plt_axes[col_idx], upsampled, plt_label, is_color)
 
         plt.tight_layout()
         out_path = f"output/section1/{img_name}_N{scale_fact}_comparison.png"
-        plt.savefig(out_path, dpi=120, bbox_inches='tight')
+        plt.savefig(out_path, dpi=120, bbox_inches="tight")
         plt.close()
 
         # ---- Zoomed-in patches figure ----
         patch_start_y, patch_start_x = tgt_height // 4, tgt_width // 4
         plt_fig2, plt_axes2 = plt.subplots(
-            1, plt_num_cols, figsize=(4 * plt_num_cols, 4))
-        plt_fig2.suptitle(
-            f"{img_name} | N={scale_fact} - Zoomed Patch", fontsize=11)
+            1, plt_num_cols, figsize=(4 * plt_num_cols, 4)
+        )
+        plt_fig2.suptitle(f"{img_name} | N={scale_fact} - Zoomed Patch", fontsize=11)
 
-        _show(plt_axes2[0], crop_patch(original, patch_start_y, patch_start_x),
-              "Original\npatch", is_color)
+        _show(
+            plt_axes2[0],
+            crop_patch(original, patch_start_y, patch_start_x),
+            "Original\npatch",
+            is_color,
+        )
         for col_idx, (method_name, upsample_fn) in enumerate(methods.items(), start=1):
-            upsampled = upsample_fn(
-                downsampled, tgt_height, tgt_width, scale_fact)
-            _show(plt_axes2[col_idx], crop_patch(upsampled, patch_start_y, patch_start_x),
-                  method_name + "\npatch", is_color)
+            upsampled = upsample_fn(downsampled, tgt_height, tgt_width, scale_fact)
+            _show(
+                plt_axes2[col_idx],
+                crop_patch(upsampled, patch_start_y, patch_start_x),
+                method_name + "\npatch",
+                is_color,
+            )
 
         plt.tight_layout()
         patch_path = f"output/section1/{img_name}_N{scale_fact}_patch.png"
-        plt.savefig(patch_path, dpi=150, bbox_inches='tight')
+        plt.savefig(patch_path, dpi=150, bbox_inches="tight")
         plt.close()
 
     return metrics
@@ -234,10 +240,10 @@ def run_section1():
     print("=" * 60)
 
     images = {
-        'cameraman':           'Images/Section 1/cameraman.tif',
-        'mandrill':            'Images/Section 1/mandrill.bmp',
-        'peppers':             'Images/Section 1/peppers.png',
-        'sparseresidential':   'Images/Section 1/sparseresidential_6.jpg',
+        "cameraman": "Images/Section 1/cameraman.tif",
+        "mandrill": "Images/Section 1/mandrill.bmp",
+        "peppers": "Images/Section 1/peppers.png",
+        "sparseresidential": "Images/Section 1/sparseresidential_6.jpg",
     }
 
     for name, path in images.items():

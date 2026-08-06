@@ -26,18 +26,21 @@ def ensure_dirs():
 
 
 def zero_pad(image, pad_h, pad_w):
-    return np.pad(image.astype(np.float64),
-                  ((pad_h, pad_h), (pad_w, pad_w)),
-                  mode='constant', constant_values=0)
+    return np.pad(
+        image.astype(np.float64),
+        ((pad_h, pad_h), (pad_w, pad_w)),
+        mode="constant",
+        constant_values=0,
+    )
 
 
 def mirror_pad(image, pad_h, pad_w):
-    return np.pad(image.astype(np.float64),
-                  ((pad_h, pad_h), (pad_w, pad_w)),
-                  mode='edge')
+    return np.pad(
+        image.astype(np.float64), ((pad_h, pad_h), (pad_w, pad_w)), mode="edge"
+    )
 
 
-def convolve2d(image, kernel, padding='zero'):
+def convolve2d(image, kernel, padding="zero"):
     if image.ndim != 2 or kernel.ndim != 2:
         raise ValueError("Image and kernel must be 2D arrays.")
 
@@ -47,12 +50,12 @@ def convolve2d(image, kernel, padding='zero'):
     pad_h = kernal_h // 2
     pad_w = kernal_w // 2
 
-    if padding == 'zero':
-        padded = np.pad(image, ((pad_h, pad_h), (pad_w, pad_w)),
-                        mode='constant', constant_values=0)
-    elif padding == 'mirror':
+    if padding == "zero":
         padded = np.pad(
-            image, ((pad_h, pad_h), (pad_w, pad_w)), mode='reflect')
+            image, ((pad_h, pad_h), (pad_w, pad_w)), mode="constant", constant_values=0
+        )
+    elif padding == "mirror":
+        padded = np.pad(image, ((pad_h, pad_h), (pad_w, pad_w)), mode="reflect")
     else:
         raise ValueError("Padding mode must be 'zero' or 'mirror'.")
 
@@ -63,7 +66,7 @@ def convolve2d(image, kernel, padding='zero'):
     # Slide the kernel across the image
     for y in range(H):
         for x in range(W):
-            window = padded[y:y+kernal_h, x:x+kernal_w]
+            window = padded[y : y + kernal_h, x : x + kernal_w]
             output[y, x] = np.sum(window * flipped_kernel)
     return output
 
@@ -109,7 +112,7 @@ def gaussian_kernel(kernel_size, sigma):
         kernel_size += 1
 
     offsets = np.arange(kernel_size, dtype=np.float64) - kernel_size // 2
-    gaussian_1d = np.exp(-offsets ** 2 / (2.0 * sigma ** 2))
+    gaussian_1d = np.exp(-(offsets**2) / (2.0 * sigma**2))
     # Create 2D kernel via outer product of 1D Gaussian (exploiting separability)
     kernel_2d = np.outer(gaussian_1d, gaussian_1d)
 
@@ -137,7 +140,7 @@ def crop_center_square(image, N):
 
     crop_h = (H - N) // 2
     crop_w = (W - N) // 2
-    return image[crop_h:crop_h + N, crop_w:crop_w + N].astype(np.float64)
+    return image[crop_h : crop_h + N, crop_w : crop_w + N].astype(np.float64)
 
 
 def next_power_of_2(n):
@@ -166,29 +169,26 @@ def _box_filter_fast(image, radius):
     window_size = 2 * radius + 1
     window_area = window_size * window_size
 
-    padded_image = np.pad(image, radius, mode='edge').astype(np.float64)
+    padded_image = np.pad(image, radius, mode="edge").astype(np.float64)
 
     # 2-D cumulative sum (creates an Integral Image)
     integral_image = padded_image.cumsum(axis=0).cumsum(axis=1)
 
     # Integral image extraction via four corners
     # The valid region for calculating the sum starts at index `radius`
-    bottom_right = integral_image[2*radius: 2 *
-                                  radius+height, 2*radius: 2*radius+width]
-    top_left = integral_image[0:height,                   0:width]
-    top_right = integral_image[0:height,
-                               2*radius: 2*radius+width]
-    bottom_left = integral_image[2*radius: 2*radius+height, 0:width]
+    bottom_right = integral_image[
+        2 * radius : 2 * radius + height, 2 * radius : 2 * radius + width
+    ]
+    top_left = integral_image[0:height, 0:width]
+    top_right = integral_image[0:height, 2 * radius : 2 * radius + width]
+    bottom_left = integral_image[2 * radius : 2 * radius + height, 0:width]
 
     window_sum = bottom_right - top_right - bottom_left + top_left
 
     return window_sum / window_area
 
 
-def compute_ssim(ref_image,
-                 test_image,
-                 window_size=11,
-                 dynamic_range=255):
+def compute_ssim(ref_image, test_image, window_size=11, dynamic_range=255):
 
     # Standard SSIM constants
     k1, k2 = 0.01, 0.03
@@ -213,8 +213,7 @@ def compute_ssim(ref_image,
     # Cov(X,Y)=E[XY]−E[X]E[Y]
     var_ref = _box_filter_fast(ref_float * ref_float, radius) - mean_ref_sq
     var_test = _box_filter_fast(test_float * test_float, radius) - mean_test_sq
-    cov_ref_test = _box_filter_fast(
-        ref_float * test_float, radius) - mean_ref_test
+    cov_ref_test = _box_filter_fast(ref_float * test_float, radius) - mean_ref_test
 
     # SSIM formula components
     numerator = (2.0 * mean_ref_test + c1) * (2.0 * cov_ref_test + c2)

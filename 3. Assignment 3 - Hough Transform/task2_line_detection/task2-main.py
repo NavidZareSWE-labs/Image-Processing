@@ -14,8 +14,7 @@ import numpy as np  # noqa: E402
 
 import matplotlib.pyplot as plt  # noqa: E402
 
-
-matplotlib.use('Agg')
+matplotlib.use("Agg")
 
 
 # ====================== Timer ======================
@@ -65,12 +64,11 @@ def gaussian_kernel(size, sigma):
 def convolve2d(image, kernel):
     kh, kw = kernel.shape
     pad = kh // 2
-    padded = np.pad(image, pad, mode='reflect')
+    padded = np.pad(image, pad, mode="reflect")
     out = np.zeros_like(image, dtype=np.float64)
     for i in range(kh):
         for j in range(kw):
-            out += kernel[i, j] * padded[i:i +
-                                         image.shape[0], j:j + image.shape[1]]
+            out += kernel[i, j] * padded[i : i + image.shape[0], j : j + image.shape[1]]
     return out
 
 
@@ -83,8 +81,7 @@ def gaussian_blur(image, size=5, sigma=1.4):
 def preprocess_lane_image(rgb):
     h, w = rgb.shape[:2]
 
-    gray = (0.299 * rgb[:, :, 0] + 0.587 *
-            rgb[:, :, 1] + 0.114 * rgb[:, :, 2]) / 255.0
+    gray = (0.299 * rgb[:, :, 0] + 0.587 * rgb[:, :, 1] + 0.114 * rgb[:, :, 2]) / 255.0
     gray = gaussian_blur(gray, size=5, sigma=1.4)
 
     r, g, b = rgb[:, :, 0], rgb[:, :, 1], rgb[:, :, 2]
@@ -93,12 +90,14 @@ def preprocess_lane_image(rgb):
     color_mask = (white | yellow).astype(np.float64)
     color_mask = gaussian_blur(color_mask, size=5, sigma=1.4)
 
-    vertices = np.array([
-        [int(w * 0.05), h - 1],
-        [int(w * 0.40), int(h * 0.65)],
-        [int(w * 0.60), int(h * 0.65)],
-        [int(w * 0.95), h - 1]
-    ])
+    vertices = np.array(
+        [
+            [int(w * 0.05), h - 1],
+            [int(w * 0.40), int(h * 0.65)],
+            [int(w * 0.60), int(h * 0.65)],
+            [int(w * 0.95), h - 1],
+        ]
+    )
     mask = np.zeros((h, w), dtype=np.float64)
     _fill_roi(mask, vertices)
 
@@ -124,7 +123,7 @@ def _fill_roi(mask, pts):
             x_ints.sort()
             xa = max(int(np.ceil(x_ints[0])), 0)
             xb = min(int(np.floor(x_ints[1])), w - 1)
-            mask[y, xa:xb + 1] = 1.0
+            mask[y, xa : xb + 1] = 1.0
 
 
 # ====================== Edge Detection ======================
@@ -132,12 +131,13 @@ SOBEL_X = np.array([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=np.float64)
 SOBEL_Y = np.array([[-1, -2, -1], [0, 0, 0], [1, 2, 1]], dtype=np.float64)
 
 
-def canny_edge_detection(image, blur_size=5, blur_sigma=1.0,
-                         low_thresh=0.05, high_thresh=0.15):
+def canny_edge_detection(
+    image, blur_size=5, blur_sigma=1.0, low_thresh=0.05, high_thresh=0.15
+):
     smoothed = gaussian_blur(image, blur_size, blur_sigma)
     gx = convolve2d(smoothed, SOBEL_X)
     gy = convolve2d(smoothed, SOBEL_Y)
-    magnitude = np.sqrt(gx ** 2 + gy ** 2)
+    magnitude = np.sqrt(gx**2 + gy**2)
     direction = np.arctan2(gy, gx)
 
     nms = _non_max_suppression(magnitude, direction)
@@ -177,7 +177,7 @@ def _hysteresis(nms, low_ratio=0.05, high_ratio=0.15):
 # ====================== Hough Lines ======================
 def hough_line_transform(edge_map, theta_res=1.0, rho_res=1.0):
     h, w = edge_map.shape
-    diag = int(np.ceil(np.sqrt(h ** 2 + w ** 2)))
+    diag = int(np.ceil(np.sqrt(h**2 + w**2)))
     thetas = np.deg2rad(np.arange(-90, 90, theta_res))
     rhos = np.arange(-diag, diag + 1, rho_res)
 
@@ -215,7 +215,9 @@ def extract_line_peaks(accumulator, thetas, rhos, threshold_ratio=0.30, nhood_si
     return peaks
 
 
-def separate_left_right_lanes(peaks, img_w, img_h, accumulator=None, thetas=None, rhos=None):
+def separate_left_right_lanes(
+    peaks, img_w, img_h, accumulator=None, thetas=None, rhos=None
+):
     y_bottom = img_h - 1
     y_top = int(img_h * 0.675)
 
@@ -239,14 +241,13 @@ def separate_left_right_lanes(peaks, img_w, img_h, accumulator=None, thetas=None
         if x_top < img_w * 0.10 or x_top > img_w * 0.90:
             continue
 
-        if (x_bottom < x_top - 10 and img_w * 0.20 < x_bottom < img_w * 0.50):
+        if x_bottom < x_top - 10 and img_w * 0.20 < x_bottom < img_w * 0.50:
             left_candidates.append((rho, theta, votes, x_bottom, x_top))
-        elif (x_bottom > x_top + 10 and img_w * 0.55 < x_bottom < img_w * 0.85):
+        elif x_bottom > x_top + 10 and img_w * 0.55 < x_bottom < img_w * 0.85:
             right_candidates.append((rho, theta, votes, x_bottom, x_top))
 
     left_line = _pick_best_lane(left_candidates, img_w * 0.35, y_top, y_bottom)
-    right_line = _pick_best_lane(
-        right_candidates, img_w * 0.68, y_top, y_bottom)
+    right_line = _pick_best_lane(right_candidates, img_w * 0.68, y_top, y_bottom)
     return left_line, right_line
 
 
@@ -304,8 +305,7 @@ def draw_lane_overlay(rgb_img, left_line, right_line, color=(0, 200, 0), alpha=0
     if left_line is not None and right_line is not None:
         (lx1, ly1), (lx2, ly2) = left_line
         (rx1, ry1), (rx2, ry2) = right_line
-        pts = np.array([[lx1, ly1], [lx2, ly2], [rx2, ry2],
-                       [rx1, ry1]], dtype=np.int32)
+        pts = np.array([[lx1, ly1], [lx2, ly2], [rx2, ry2], [rx1, ry1]], dtype=np.int32)
 
         mask = np.zeros((h, w), dtype=np.uint8)
         _fill_polygon(mask, pts, 1)
@@ -334,26 +334,26 @@ def _fill_polygon(mask, pts, value):
             x_ints.sort()
             xa = max(int(np.ceil(x_ints[0])), 0)
             xb = min(int(np.floor(x_ints[1])), w - 1)
-            mask[y, xa:xb + 1] = value
+            mask[y, xa : xb + 1] = value
 
 
 def save_lane_pipeline(original, edges, accumulator, overlay, path, img_name=""):
     fig, axes = plt.subplots(1, 4, figsize=(22, 5))
-    titles = ['Original', 'Edge Map', 'Hough Accumulator', 'Lane Overlay']
+    titles = ["Original", "Edge Map", "Hough Accumulator", "Lane Overlay"]
     imgs = [original, edges, accumulator, overlay]
-    cmaps = [None, 'gray', 'hot', None]
+    cmaps = [None, "gray", "hot", None]
 
     for ax, img, t, cm in zip(axes, imgs, titles, cmaps):
         if cm:
-            ax.imshow(img, cmap=cm, aspect='auto')
+            ax.imshow(img, cmap=cm, aspect="auto")
         else:
             ax.imshow(img)
         ax.set_title(t, fontsize=10)
-        ax.axis('off')
+        ax.axis("off")
     if img_name:
         fig.suptitle(f"Lane Detection — {img_name}", fontsize=13)
     fig.tight_layout()
-    fig.savefig(path, dpi=120, bbox_inches='tight')
+    fig.savefig(path, dpi=120, bbox_inches="tight")
     plt.close(fig)
 
 
@@ -364,9 +364,10 @@ def run():
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-    files = sorted([f for f in os.listdir(IMAGE_DIR)
-                    if f.lower().endswith('.png')],
-                   key=lambda x: int(os.path.splitext(x)[0]))
+    files = sorted(
+        [f for f in os.listdir(IMAGE_DIR) if f.lower().endswith(".png")],
+        key=lambda x: int(os.path.splitext(x)[0]),
+    )
 
     print("\n" + "=" * 70)
     print("Autonomous Lane Detection (Hough Lines)")
@@ -422,8 +423,14 @@ def run():
         frames.append(overlay)
 
         if i in (0, len(files) // 2, len(files) - 1):
-            save_lane_pipeline(rgb, edges.astype(float), accumulator, overlay,
-                               os.path.join(OUTPUT_DIR, f"{stem}_pipeline.png"), fname)
+            save_lane_pipeline(
+                rgb,
+                edges.astype(float),
+                accumulator,
+                overlay,
+                os.path.join(OUTPUT_DIR, f"{stem}_pipeline.png"),
+                fname,
+            )
 
     gif_path = os.path.join(OUTPUT_DIR, "lane_detection.gif")
     print(f"\nBuilding GIF with {len(frames)} frames...")

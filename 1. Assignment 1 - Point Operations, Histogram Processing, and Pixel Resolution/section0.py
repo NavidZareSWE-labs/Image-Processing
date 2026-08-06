@@ -3,9 +3,10 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 import matplotlib
-matplotlib.use('Agg')
 
-os.makedirs('output/utils', exist_ok=True)
+matplotlib.use("Agg")
+
+os.makedirs("output/utils", exist_ok=True)
 
 
 def check_embedding_feasibility(sm_row, sm_col, lg_row, lg_col):
@@ -19,7 +20,8 @@ def embed_diamond(SM, LG):
     lg_row, lg_col = LG.shape
 
     min_required_dim, target_too_small = check_embedding_feasibility(
-        sm_row, sm_col, lg_row, lg_col)
+        sm_row, sm_col, lg_row, lg_col
+    )
 
     if target_too_small:
         return "Impossible"
@@ -51,9 +53,13 @@ def run_utils():
     print("\n[Example 1] S (5x5) into L (9x9 - exact fit):")
     print("S =\n", SM1)
     print("Inserted L =\n", result)
-    plot_result_s0(SM1, LG1, result,
-                   title="Section 0 - Diamond Embedding (5x5 into 9x9)",
-                   filename="diamond_embedding_5x9.png")
+    plot_result_s0(
+        SM1,
+        LG1,
+        result,
+        title="Section 0 - Diamond Embedding (5x5 into 9x9)",
+        filename="diamond_embedding_5x9.png",
+    )
 
     print("\n" + "-" * 60)
 
@@ -64,9 +70,13 @@ def run_utils():
     print("\n[Example 2] S (3x4) into L (11x11):")
     print("S =\n", SM2)
     print("Inserted L =\n", result2)
-    plot_result_s0(SM2, LG2, result2,
-                   title="Section 0 - Diamond Embedding (3x4 into 11x11)",
-                   filename="diamond_embedding_3x11.png")
+    plot_result_s0(
+        SM2,
+        LG2,
+        result2,
+        title="Section 0 - Diamond Embedding (3x4 into 11x11)",
+        filename="diamond_embedding_3x11.png",
+    )
 
     print("\n" + "-" * 60)
     # ---- Case 3: Impossible case ----
@@ -88,17 +98,20 @@ def test_random_embedding():
 
     result = embed_diamond(SM, LG)
 
-    print(
-        f"\n[Random Example] SM ({sm_row}x{sm_col}) into LG ({lg_row}x{lg_col}):")
+    print(f"\n[Random Example] SM ({sm_row}x{sm_col}) into LG ({lg_row}x{lg_col}):")
 
     if isinstance(result, str) and result == "Impossible":
         print(f"Result: '{result}' (Target matrix is too small)")
     else:
         print("SM =\n", SM)
         print("Inserted LG =\n", result)
-        plot_result_s0(SM, LG, result,
-                       title=f"Random Diamond Embedding ({sm_row}x{sm_col} into {lg_row}x{lg_col})",
-                       filename="random_diamond_embedding.png")
+        plot_result_s0(
+            SM,
+            LG,
+            result,
+            title=f"Random Diamond Embedding ({sm_row}x{sm_col} into {lg_row}x{lg_col})",
+            filename="random_diamond_embedding.png",
+        )
 
 
 if __name__ == "__main__":

@@ -1,22 +1,26 @@
 import numpy as np
 
-
 _PAIR_TEMPLATES = {
-    "horizontal": (np.array([[0, 0, 0, 0],
-                             [0, 1, 1, 0],
-                             [0, 0, 0, 0]]), (1, 1), (0, 1)),
-    "vertical":   (np.array([[0, 0, 0],
-                             [0, 1, 0],
-                             [0, 1, 0],
-                             [0, 0, 0]]), (1, 1), (1, 0)),
-    "diag_main":  (np.array([[0,  0,  0, -1],
-                             [0,  1,  0,  0],
-                             [0,  0,  1,  0],
-                             [-1, 0,  0,  0]]), (1, 1), (1, 1)),
-    "diag_anti":  (np.array([[-1, 0,  0,  0],
-                             [0,  0,  1,  0],
-                             [0,  1,  0,  0],
-                             [0,  0,  0, -1]]), (1, 2), (1, -1)),
+    "horizontal": (
+        np.array([[0, 0, 0, 0], [0, 1, 1, 0], [0, 0, 0, 0]]),
+        (1, 1),
+        (0, 1),
+    ),
+    "vertical": (
+        np.array([[0, 0, 0], [0, 1, 0], [0, 1, 0], [0, 0, 0]]),
+        (1, 1),
+        (1, 0),
+    ),
+    "diag_main": (
+        np.array([[0, 0, 0, -1], [0, 1, 0, 0], [0, 0, 1, 0], [-1, 0, 0, 0]]),
+        (1, 1),
+        (1, 1),
+    ),
+    "diag_anti": (
+        np.array([[-1, 0, 0, 0], [0, 0, 1, 0], [0, 1, 0, 0], [0, 0, 0, -1]]),
+        (1, 2),
+        (1, -1),
+    ),
 }
 
 # ------------------- Structuring Elements -------------------
@@ -29,7 +33,8 @@ def make_structuringElements(shape="square", size=3):
 
     if size % 2 == 0:
         raise ValueError(
-            "size must be odd so the Structuring Elements has a unique centre")
+            "size must be odd so the Structuring Elements has a unique centre"
+        )
 
     if shape == "square":
         return np.ones((size, size), dtype=bool)
@@ -43,7 +48,7 @@ def make_structuringElements(shape="square", size=3):
 
     if shape == "disk":
         radius = size // 2
-        yy, xx = np.ogrid[-radius:radius + 1, -radius:radius + 1]
+        yy, xx = np.ogrid[-radius : radius + 1, -radius : radius + 1]
         return (xx * xx + yy * yy) <= (radius * radius)
 
     raise ValueError(f"undefined Structuring Elements shape '{shape}'")
@@ -56,15 +61,18 @@ def erode(image, se, origin=None, border_value=False):
     se_h, se_w = se.shape
     origin_y, origin_x = (se_h // 2, se_w // 2) if origin is None else origin
 
-    padded = np.pad(image, ((origin_y, se_h - 1 - origin_y),
-                            (origin_x, se_w - 1 - origin_x)),
-                    mode="constant", constant_values=border_value)
+    padded = np.pad(
+        image,
+        ((origin_y, se_h - 1 - origin_y), (origin_x, se_w - 1 - origin_x)),
+        mode="constant",
+        constant_values=border_value,
+    )
     img_h, img_w = image.shape
     result = np.ones((img_h, img_w), dtype=bool)
     for dy in range(se_h):
         for dx in range(se_w):
             if se[dy, dx]:
-                result &= padded[dy:dy + img_h, dx:dx + img_w]
+                result &= padded[dy : dy + img_h, dx : dx + img_w]
     return result
 
 
@@ -74,16 +82,21 @@ def dilate(image, se, origin=None):
     se_h, se_w = se.shape
     origin_y, origin_x = (se_h // 2, se_w // 2) if origin is None else origin
 
-    padded = np.pad(image, ((se_h - 1 - origin_y, origin_y),
-                            (se_w - 1 - origin_x, origin_x)),
-                    mode="constant", constant_values=False)
+    padded = np.pad(
+        image,
+        ((se_h - 1 - origin_y, origin_y), (se_w - 1 - origin_x, origin_x)),
+        mode="constant",
+        constant_values=False,
+    )
     img_h, img_w = image.shape
     result = np.zeros((img_h, img_w), dtype=bool)
     for dy in range(se_h):
         for dx in range(se_w):
             if se[dy, dx]:
-                result |= padded[se_h - 1 - dy: se_h - 1 - dy + img_h,
-                                 se_w - 1 - dx: se_w - 1 - dx + img_w]
+                result |= padded[
+                    se_h - 1 - dy : se_h - 1 - dy + img_h,
+                    se_w - 1 - dx : se_w - 1 - dx + img_w,
+                ]
     return result
 
 
@@ -99,8 +112,8 @@ def hit_or_miss(image, template, origin=None):
     se_h, se_w = template.shape
     if origin is None:
         origin = (se_h // 2, se_w // 2)
-    foreground = (template == 1)
-    background = (template == 0)
+    foreground = template == 1
+    background = template == 0
     foreground_fit = erode(image, foreground, origin)
     background_fit = erode(~image, background, origin, border_value=True)
     return foreground_fit & background_fit
@@ -111,7 +124,7 @@ def hit_or_miss(image, template, origin=None):
 
 def find_isolated_zero_pairs(matrix):
     values = np.asarray(matrix, dtype=int)
-    foreground = (values == 0)
+    foreground = values == 0
     pairs = []
     for template, origin, partner_offset in _PAIR_TEMPLATES.values():
         hits = hit_or_miss(foreground, template, origin)
@@ -128,37 +141,14 @@ def find_isolated_zero_pairs(matrix):
 # ------------------- Thinning / Skeletonisation (3.2) -------------------
 def golay_thinning_templates():
     return [
-        np.array([[0,  0,  0],
-                  [-1,  1, -1],
-                  [1,  1,  1]]),
-
-        np.array([[-1,  0,  0],
-                  [1,  1,  0],
-                  [-1,  1, -1]]),
-
-        np.array([[1, -1,  0],
-                  [1,  1,  0],
-                  [1, -1,  0]]),
-
-        np.array([[-1,  1, -1],
-                  [1,  1,  0],
-                  [-1,  0,  0]]),
-
-        np.array([[1,  1,  1],
-                  [-1,  1, -1],
-                  [0,  0,  0]]),
-
-        np.array([[-1,  1, -1],
-                  [0,  1,  1],
-                  [0,  0, -1]]),
-
-        np.array([[0, -1,  1],
-                  [0,  1,  1],
-                  [0, -1,  1]]),
-
-        np.array([[0,  0, -1],
-                  [0,  1,  1],
-                  [-1,  1, -1]]),
+        np.array([[0, 0, 0], [-1, 1, -1], [1, 1, 1]]),
+        np.array([[-1, 0, 0], [1, 1, 0], [-1, 1, -1]]),
+        np.array([[1, -1, 0], [1, 1, 0], [1, -1, 0]]),
+        np.array([[-1, 1, -1], [1, 1, 0], [-1, 0, 0]]),
+        np.array([[1, 1, 1], [-1, 1, -1], [0, 0, 0]]),
+        np.array([[-1, 1, -1], [0, 1, 1], [0, 0, -1]]),
+        np.array([[0, -1, 1], [0, 1, 1], [0, -1, 1]]),
+        np.array([[0, 0, -1], [0, 1, 1], [-1, 1, -1]]),
     ]
 
 
@@ -184,37 +174,14 @@ def thinning(image, templates=None, max_iter=200):
 # ------------------- Pruning (3.3) -------------------
 def endpoint_templates():
     return [
-        np.array([[0, 1, 0],
-                  [0, 1, 0],
-                  [0, 0, 0]]),
-
-        np.array([[0, 0, 0],
-                  [0, 1, 0],
-                  [0, 1, 0]]),
-
-        np.array([[0, 0, 0],
-                  [1, 1, 0],
-                  [0, 0, 0]]),
-
-        np.array([[0, 0, 0],
-                  [0, 1, 1],
-                  [0, 0, 0]]),
-
-        np.array([[1, 0, 0],
-                  [0, 1, 0],
-                  [0, 0, 0]]),
-
-        np.array([[0, 0, 1],
-                  [0, 1, 0],
-                  [0, 0, 0]]),
-
-        np.array([[0, 0, 0],
-                  [0, 1, 0],
-                  [1, 0, 0]]),
-
-        np.array([[0, 0, 0],
-                  [0, 1, 0],
-                  [0, 0, 1]]),
+        np.array([[0, 1, 0], [0, 1, 0], [0, 0, 0]]),
+        np.array([[0, 0, 0], [0, 1, 0], [0, 1, 0]]),
+        np.array([[0, 0, 0], [1, 1, 0], [0, 0, 0]]),
+        np.array([[0, 0, 0], [0, 1, 1], [0, 0, 0]]),
+        np.array([[1, 0, 0], [0, 1, 0], [0, 0, 0]]),
+        np.array([[0, 0, 1], [0, 1, 0], [0, 0, 0]]),
+        np.array([[0, 0, 0], [0, 1, 0], [1, 0, 0]]),
+        np.array([[0, 0, 0], [0, 1, 0], [0, 0, 1]]),
     ]
 
 

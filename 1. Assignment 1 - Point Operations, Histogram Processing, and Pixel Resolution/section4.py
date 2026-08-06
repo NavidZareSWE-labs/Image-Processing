@@ -1,14 +1,21 @@
 from utils import compute_norm_cdf, compute_histogram, to_gray, get_r_range
-from visualize import plot_rgb_histogram_matching_results_s4, plot_gray_histogram_matching_results_s4, plot_rgb_vs_hsv_equalization_s4, plot_per_channel_histograms_s4, plot_hsv_decomposition_s4
+from visualize import (
+    plot_rgb_histogram_matching_results_s4,
+    plot_gray_histogram_matching_results_s4,
+    plot_rgb_vs_hsv_equalization_s4,
+    plot_per_channel_histograms_s4,
+    plot_hsv_decomposition_s4,
+)
 from section3 import calc_ghe
 import os
 import matplotlib.pyplot as plt
 import numpy as np
 import cv2
 import matplotlib
-matplotlib.use('Agg')
 
-os.makedirs('output/section4', exist_ok=True)
+matplotlib.use("Agg")
+
+os.makedirs("output/section4", exist_ok=True)
 
 
 def match_histogram(src, ref):
@@ -24,23 +31,23 @@ def match_histogram(src, ref):
 
 
 def run_histogram_matching():
-    print('\n[4.1] Histogram Matching (Specification)')
+    print("\n[4.1] Histogram Matching (Specification)")
 
     # ─── Grayscale pairs ────────────────────────────────────────────
-    desired_gray_path = 'Images/Section 4/grayscale/desired.png'
+    desired_gray_path = "Images/Section 4/grayscale/desired.png"
     ref_raw = cv2.imread(desired_gray_path, cv2.IMREAD_UNCHANGED)
     if ref_raw is None:
-        print('  [WARNING] Cannot read grayscale desired image')
+        print("  [WARNING] Cannot read grayscale desired image")
         return
     ref_gray = to_gray(ref_raw)
 
     for src_name, src_path in [
-        ('initial_1', 'Images/Section 4/grayscale/initial_1.tif'),
-        ('initial_2', 'Images/Section 4/grayscale/initial_2.tif'),
+        ("initial_1", "Images/Section 4/grayscale/initial_1.tif"),
+        ("initial_2", "Images/Section 4/grayscale/initial_2.tif"),
     ]:
         img_src = cv2.imread(src_path, cv2.IMREAD_UNCHANGED)
         if img_src is None:
-            print(f'  [WARNING] Cannot read {src_path}')
+            print(f"  [WARNING] Cannot read {src_path}")
             continue
         src = to_gray(img_src)
         matched = match_histogram(src, ref_gray)
@@ -49,7 +56,7 @@ def run_histogram_matching():
         cdf_src = compute_norm_cdf(compute_histogram(src))
         cdf_ref = compute_norm_cdf(compute_histogram(ref_gray))
         diff_m = np.abs(cdf_ref[np.newaxis, :] - cdf_src[:, np.newaxis])
-        lut_vals = np.argmin(diff_m, axis=1).astype(np.float64)   # (256,)
+        lut_vals = np.argmin(diff_m, axis=1).astype(np.float64)  # (256,)
 
         hist_src = compute_histogram(src)
         hist_ref = compute_histogram(ref_gray)
@@ -57,37 +64,48 @@ def run_histogram_matching():
         r_range = get_r_range()
 
         plot_gray_histogram_matching_results_s4(
-            ref_gray, src_name, src, matched, cdf_src, cdf_ref, lut_vals, hist_src, hist_ref, hist_matched, r_range)
+            ref_gray,
+            src_name,
+            src,
+            matched,
+            cdf_src,
+            cdf_ref,
+            lut_vals,
+            hist_src,
+            hist_ref,
+            hist_matched,
+            r_range,
+        )
 
     # ─── Color image pairs (channel-by-channel matching) ────────────
-    desired_rgb_path = 'Images/Section 4/rgb/desired.jpg'
+    desired_rgb_path = "Images/Section 4/rgb/desired.jpg"
     ref_rgb_raw = cv2.imread(desired_rgb_path)
     if ref_rgb_raw is None:
-        print('  [WARNING] Cannot read RGB desired image')
+        print("  [WARNING] Cannot read RGB desired image")
         return
 
     for src_name, src_path in [
-        ('initial_2', 'Images/Section 4/rgb/initial_2.jpg'),
-        ('initial_1', 'Images/Section 4/rgb/initial_1.webp'),
+        ("initial_2", "Images/Section 4/rgb/initial_2.jpg"),
+        ("initial_1", "Images/Section 4/rgb/initial_1.webp"),
     ]:
         img_src = cv2.imread(src_path)
         if img_src is None:
-            print(f'  [WARNING] Cannot read {src_path}')
+            print(f"  [WARNING] Cannot read {src_path}")
             continue
 
         # Channel-by-channel histogram matching (B, G, R)
         matched_channels = []
         for ch in range(3):
-            matched_ch = match_histogram(img_src[:, :, ch],
-                                         ref_rgb_raw[:, :, ch])
+            matched_ch = match_histogram(img_src[:, :, ch], ref_rgb_raw[:, :, ch])
             matched_channels.append(matched_ch)
         matched_rgb = np.stack(matched_channels, axis=2)
 
-        channel_names = ['Blue', 'Green', 'Red']
-        channel_cols = ['#3498db', '#2ecc71', '#e74c3c']
+        channel_names = ["Blue", "Green", "Red"]
+        channel_cols = ["#3498db", "#2ecc71", "#e74c3c"]
 
         plot_rgb_histogram_matching_results_s4(
-            src_name, img_src, ref_rgb_raw, matched_rgb, channel_names, channel_cols)
+            src_name, img_src, ref_rgb_raw, matched_rgb, channel_names, channel_cols
+        )
 
 
 # ============================================================
@@ -106,7 +124,7 @@ def rgb_to_hsv(rgb):
     V = Cmax.copy()
 
     # --- Saturation ---
-    safe_cmax = np.where(Cmax > 1e-9, Cmax, 1.0)   # avoid division by zero
+    safe_cmax = np.where(Cmax > 1e-9, Cmax, 1.0)  # avoid division by zero
     S = np.where(Cmax > 1e-9, delta / safe_cmax, 0.0)
 
     # --- Hue ---
@@ -177,6 +195,7 @@ def hsv_to_rgb(hsv):
 
 # ─── High-level colour HE helpers ───────────────────────────
 
+
 def apply_ghe_per_channel(bgr):
     channels_eq = [calc_ghe(bgr[:, :, ch]) for ch in range(3)]
     return np.stack(channels_eq, axis=2)
@@ -208,18 +227,18 @@ def eq_v_channel(bgr):
 
 
 def run_color_operations():
-    print('\n[4.2] Point Operations on Color Images (RGB <-> HSV)')
+    print("\n[4.2] Point Operations on Color Images (RGB <-> HSV)")
 
     # Use both color source images
     for src_name, src_path in [
-        ('initial_2', 'Images/Section 4/rgb/initial_2.jpg'),
-        ('initial_1', 'Images/Section 4/rgb/initial_1.webp'),
+        ("initial_2", "Images/Section 4/rgb/initial_2.jpg"),
+        ("initial_1", "Images/Section 4/rgb/initial_1.webp"),
     ]:
         img = cv2.imread(src_path)
         if img is None:
-            print(f'  [WARNING] Cannot read {src_path}')
+            print(f"  [WARNING] Cannot read {src_path}")
             continue
-        print(f'  Processing {src_name}  {img.shape[:2]} ...')
+        print(f"  Processing {src_name}  {img.shape[:2]} ...")
 
         eq_rgb = apply_ghe_per_channel(img)
         eq_v = eq_v_channel(img)
@@ -228,39 +247,41 @@ def run_color_operations():
         plot_rgb_vs_hsv_equalization_s4(src_name, img, eq_rgb, eq_v)
 
         # ── Per-channel histogram comparison ────────────────────────
-        ch_names = ['Blue', 'Green', 'Red']
-        ch_cols = ['#3498db', '#2ecc71', '#e74c3c']
+        ch_names = ["Blue", "Green", "Red"]
+        ch_cols = ["#3498db", "#2ecc71", "#e74c3c"]
         r_range = get_r_range()
 
         plot_per_channel_histograms_s4(
-            src_name, img, eq_rgb, eq_v, ch_names, ch_cols, r_range)
+            src_name, img, eq_rgb, eq_v, ch_names, ch_cols, r_range
+        )
 
         # ── HSV decomposition figure ─────────────────────────────────
         rgb_float = img[:, :, ::-1].astype(np.float64) / 255.0
         hsv = rgb_to_hsv(rgb_float)
-        H_chan = hsv[:, :, 0] / 360.0         # normalise for display
+        H_chan = hsv[:, :, 0] / 360.0  # normalise for display
         S_chan = hsv[:, :, 1]
         V_chan = hsv[:, :, 2]
-        V_eq_norm = calc_ghe(
-            np.clip(V_chan * 255, 0, 255).astype(np.uint8)
-        ).astype(np.float64) / 255.0
+        V_eq_norm = (
+            calc_ghe(np.clip(V_chan * 255, 0, 255).astype(np.uint8)).astype(np.float64)
+            / 255.0
+        )
 
-        plot_hsv_decomposition_s4(
-            src_name, img, H_chan, S_chan, V_chan, V_eq_norm)
+        plot_hsv_decomposition_s4(src_name, img, H_chan, S_chan, V_chan, V_eq_norm)
 
 
 def run_section4():
-    print('\n' + '=' * 60)
-    print('SECTION 4: Histogram Matching & Color Spaces')
-    print('=' * 60)
+    print("\n" + "=" * 60)
+    print("SECTION 4: Histogram Matching & Color Spaces")
+    print("=" * 60)
 
     run_histogram_matching()
     run_color_operations()
 
-    print('\n[Section 4] All outputs saved to output/section4/')
+    print("\n[Section 4] All outputs saved to output/section4/")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import os
+
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
     run_section4()

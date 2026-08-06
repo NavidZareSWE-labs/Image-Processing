@@ -1,10 +1,9 @@
-
-
 import numpy as np
 from matplotlib.patches import Rectangle
 import matplotlib.pyplot as plt
 import os
 import matplotlib
+
 matplotlib.use("Agg")
 
 
@@ -24,18 +23,37 @@ def plot_matrix_pairs(matrix, pairs, path):
 
     for r in range(M.shape[0]):
         for c in range(M.shape[1]):
-            ax.text(c, r, str(M[r, c]), ha="center", va="center",
-                    color="red" if M[r, c] == 0 else "black", fontsize=14)
-    colors = ["tab:green", "tab:blue", "tab:orange", "tab:purple",
-              "tab:cyan", "tab:olive"]
+            ax.text(
+                c,
+                r,
+                str(M[r, c]),
+                ha="center",
+                va="center",
+                color="red" if M[r, c] == 0 else "black",
+                fontsize=14,
+            )
+    colors = [
+        "tab:green",
+        "tab:blue",
+        "tab:orange",
+        "tab:purple",
+        "tab:cyan",
+        "tab:olive",
+    ]
     for k, pair in enumerate(pairs):
         col = colors[k % len(colors)]
         rs = [p[0] for p in pair]
         cs = [p[1] for p in pair]
-        ax.add_patch(Rectangle((min(cs) - 0.45, min(rs) - 0.45),
-                               (max(cs) - min(cs)) + 0.9,
-                               (max(rs) - min(rs)) + 0.9,
-                               fill=False, edgecolor=col, linewidth=2.5))
+        ax.add_patch(
+            Rectangle(
+                (min(cs) - 0.45, min(rs) - 0.45),
+                (max(cs) - min(cs)) + 0.9,
+                (max(rs) - min(rs)) + 0.9,
+                fill=False,
+                edgecolor=col,
+                linewidth=2.5,
+            )
+        )
     ax.set_xticks(range(M.shape[1]))
     ax.set_yticks(range(M.shape[0]))
     ax.set_title(f"Part 3.1 -- isolated zero-pairs found: {len(pairs)}")

@@ -1,8 +1,9 @@
 import numpy as np
 
 
-def make_binary_matrix(shape=None, like=None, p=0.7, dtype=np.uint8,
-                       min_size=2, max_size=10, seed=None):
+def make_binary_matrix(
+    shape=None, like=None, p=0.7, dtype=np.uint8, min_size=2, max_size=10, seed=None
+):
     rng = np.random.default_rng(seed)
 
     if shape is not None:

@@ -3,7 +3,6 @@ import sys
 import time
 import os
 
-
 ROOT = os.path.dirname(os.path.abspath(__file__))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
@@ -25,12 +24,15 @@ def main():
 
         if task_num == 1:
             from section1 import run_section1
+
             run_section1()
         elif task_num == 2:
             from section2 import run_section2
+
             run_section2()
         elif task_num == 3:
             from section3 import run_section3
+
             run_section3()
 
         elapsed = time.time() - t_start
@@ -50,5 +52,5 @@ def main():
     print()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
